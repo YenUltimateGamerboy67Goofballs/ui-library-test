@@ -7,9 +7,13 @@ local VexUI = {
     Toggles = {},
     Options = {},
     CustomIcons = {},
+    Gui = nil,
+    NotifGui = nil,
+    Unloaded = false,
 }
 VexUI.__index = VexUI
 
+-- ============ SERVICES ============
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -38,7 +42,7 @@ local Theme = {
     Secondary = Color3.fromRGB(16, 16, 20),
     Tertiary = Color3.fromRGB(24, 24, 29),
     Card = Color3.fromRGB(14, 14, 18),
-    Groupbox = Color3.fromRGB(18, 18, 22),       -- subtle groupbox bg, no border
+    Groupbox = Color3.fromRGB(18, 18, 22),
     Border = Color3.fromRGB(42, 42, 50),
     BorderSubtle = Color3.fromRGB(32, 32, 38),
     Text = Color3.fromRGB(235, 235, 240),
@@ -165,71 +169,66 @@ local function Copy(text)
     return false
 end
 
--- ============ DRAGGABLE (with smooth animation) ============
+-- ============ DRAGGABLE (FIXED: no shrink on click) ============
 local function MakeDraggable(frame, handle, getScale)
     local state = { Moved = 0, Dragging = false }
-    local dragging, dragStart, startPos
+    local dragging = false
+    local hasMoved = false
+    local dragStart, startPos
+    local origSize
 
     handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            state.Dragging = true
+            hasMoved = false
+            state.Dragging = false
             state.Moved = 0
             dragStart = input.Position
             startPos = frame.Position
-
-            -- Smooth "pick up" animation
-            Tween(frame, 0.22, {
-                Size = UDim2.new(
-                    frame.Size.X.Scale,
-                    frame.Size.X.Offset + 6,
-                    frame.Size.Y.Scale,
-                    frame.Size.Y.Offset + 6
-                ),
-                Position = UDim2.new(
-                    startPos.X.Scale,
-                    startPos.X.Offset - 3,
-                    startPos.Y.Scale,
-                    startPos.Y.Offset - 3
-                ),
-            }, Enum.EasingStyle.Quint)
+            origSize = frame.Size
 
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
+                if input.UserInputState == Enum.UserInputState.End and dragging then
                     dragging = false
-                    state.Dragging = false
-                    -- Smooth "drop" animation
-                    Tween(frame, 0.28, {
-                        Size = UDim2.new(
-                            frame.Size.X.Scale,
-                            frame.Size.X.Offset - 6,
-                            frame.Size.Y.Scale,
-                            frame.Size.Y.Offset - 6
-                        ),
-                        Position = UDim2.new(
-                            frame.Position.X.Scale,
-                            frame.Position.X.Offset + 3,
-                            frame.Position.Y.Scale,
-                            frame.Position.Y.Offset + 3
-                        ),
-                    }, Enum.EasingStyle.Quint)
+                    if hasMoved then
+                        state.Dragging = false
+                        -- Drop: shrink back to original size at current position
+                        Tween(frame, 0.28, {
+                            Size = origSize,
+                            Position = frame.Position,
+                        }, Enum.EasingStyle.Quint)
+                    end
                 end
             end)
         end
     end)
 
     Connect(UserInputService.InputChanged, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch) then
-            local s = getScale and getScale() or 1
-            local d = (input.Position - dragStart) / s
-            state.Moved = math.max(state.Moved, d.Magnitude)
+        if not dragging then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
 
-            -- Keep the +3 offset from the "pick up" animation
+        local s = getScale and getScale() or 1
+        local d = (input.Position - dragStart) / s
+        state.Moved = math.max(state.Moved, d.Magnitude)
+
+        -- Only trigger "pick up" once the user ACTUALLY moves (> 4px)
+        if not hasMoved and d.Magnitude > 4 then
+            hasMoved = true
+            state.Dragging = true
+            Tween(frame, 0.22, {
+                Size = UDim2.new(
+                    origSize.X.Scale, origSize.X.Offset + 6,
+                    origSize.Y.Scale, origSize.Y.Offset + 6
+                ),
+            }, Enum.EasingStyle.Quint)
+        end
+
+        if hasMoved then
             frame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset - 3 + d.X,
-                startPos.Y.Scale, startPos.Y.Offset - 3 + d.Y
+                startPos.X.Scale, startPos.X.Offset + d.X,
+                startPos.Y.Scale, startPos.Y.Offset + d.Y
             )
         end
     end)
@@ -628,7 +627,7 @@ local function LoadAvatar(img)
     end)
 end
 
--- Card with NO border - just darker background
+-- Card with optional hover scale (if interactive)
 local function Card(parent, size, bg, class)
     local isButton = class == "TextButton"
     local f = Create(class or "Frame", {
@@ -640,9 +639,19 @@ local function Card(parent, size, bg, class)
     if isButton then
         f.Text = ""
         f.AutoButtonColor = false
+        f.MouseEnter:Connect(function()
+            Tween(f, 0.2, {
+                Size = UDim2.new(
+                    size.X.Scale, size.X.Offset + 3,
+                    size.Y.Scale, size.Y.Offset + 3
+                ),
+            }, Enum.EasingStyle.Quint)
+        end)
+        f.MouseLeave:Connect(function()
+            Tween(f, 0.2, { Size = size }, Enum.EasingStyle.Quint)
+        end)
     end
     Corner(f, 10)
-    -- NO STROKE - cleaner look
     return f
 end
 
@@ -704,7 +713,6 @@ local function StatTile(row, order, title, value, wScale, onClick)
         Parent = row,
     })
     Corner(btn, 8)
-    -- No stroke
 
     local holder = Create("Frame", {
         BackgroundTransparency = 1,
@@ -803,6 +811,21 @@ function VexUI:CreateWindow(opts)
     local size = opts.Size or UDim2.fromOffset(700, 430)
     local gui = EnsureGui()
 
+    -- Shadow under window
+    local shadow = Create("ImageLabel", {
+        Name = "Shadow",
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5028857472",
+        ImageColor3 = Color3.new(0, 0, 0),
+        ImageTransparency = 0.5,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(50, 50, 450, 450),
+        Size = UDim2.new(size.X.Scale, size.X.Offset + 40, size.Y.Scale, size.Y.Offset + 40),
+        Position = UDim2.new(0.5, -size.X.Offset / 2 - 20, 0.5, -size.Y.Offset / 2 - 20),
+        ZIndex = 0,
+        Parent = gui,
+    })
+
     local main = Create("Frame", {
         Name = "Main",
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -815,9 +838,22 @@ function VexUI:CreateWindow(opts)
         Parent = gui,
     })
     Corner(main, 12)
-    -- Subtle border kept (main window)
     Stroke(main, Theme.BorderSubtle, 1)
     local uiScale = Create("UIScale", { Parent = main })
+
+    -- Bind shadow to window
+    Connect(main:GetPropertyChangedSignal("Position"), function()
+        shadow.Position = UDim2.new(
+            main.Position.X.Scale, main.Position.X.Offset - 20,
+            main.Position.Y.Scale, main.Position.Y.Offset - 20
+        )
+    end)
+    Connect(main:GetPropertyChangedSignal("Size"), function()
+        shadow.Size = UDim2.new(
+            main.Size.X.Scale, main.Size.X.Offset + 40,
+            main.Size.Y.Scale, main.Size.Y.Offset + 40
+        )
+    end)
 
     local topBar = Create("Frame", {
         Name = "TopBar",
@@ -1068,6 +1104,16 @@ function VexUI:CreateWindow(opts)
         windowObj.ToggleButton = fb
     end
 
+    -- Intro animation
+    local origSize = main.Size
+    local origTransparency = main.BackgroundTransparency
+    main.Size = UDim2.new(origSize.X.Scale, origSize.X.Offset - 30, origSize.Y.Scale, origSize.Y.Offset - 30)
+    main.BackgroundTransparency = 1
+    Tween(main, 0.4, {
+        Size = origSize,
+        BackgroundTransparency = origTransparency,
+    }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
     return windowObj
 end
 
@@ -1186,14 +1232,20 @@ function Window:AddTab(name, icon)
     btn.MouseEnter:Connect(function()
         tip.Visible = true
         if self.ActiveTab ~= tab then
-            Tween(btn, 0.15, { BackgroundTransparency = 0.6 })
+            Tween(btn, 0.18, {
+                BackgroundTransparency = 0.6,
+                Size = UDim2.fromOffset(46, 46),
+            }, Enum.EasingStyle.Back)
             TintIcon(ic, Theme.Text)
         end
     end)
     btn.MouseLeave:Connect(function()
         tip.Visible = false
         if self.ActiveTab ~= tab then
-            Tween(btn, 0.15, { BackgroundTransparency = 1 })
+            Tween(btn, 0.18, {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromOffset(42, 42),
+            }, Enum.EasingStyle.Quint)
             TintIcon(ic, Theme.SubText)
         end
     end)
@@ -1584,7 +1636,7 @@ function Tab:AddRightGroupbox(name, icon)
     return self:_AddGroupbox(name, icon, self.Right)
 end
 
--- *** GROUPBOX: NO border, just background + header divider ***
+-- GROUPBOX: no border, subtle divider under header
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({
         Name = name,
@@ -1603,11 +1655,8 @@ function Tab:_AddGroupbox(name, icon, column)
         Parent = column,
     })
     Corner(frame, 10)
-    -- NO STROKE - clean minimal look
-
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
 
-    -- Header
     local titleFrame = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 36),
@@ -1632,8 +1681,7 @@ function Tab:_AddGroupbox(name, icon, column)
         Parent = titleFrame,
     })
 
-    -- Only THIS divider line under header
-    local divider = Create("Frame", {
+    Create("Frame", {
         BackgroundColor3 = Theme.Border,
         BackgroundTransparency = 0.4,
         BorderSizePixel = 0,
@@ -1642,7 +1690,6 @@ function Tab:_AddGroupbox(name, icon, column)
         LayoutOrder = 2,
         Parent = frame,
     })
-    -- spacer so content goes below divider
     Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 1),
@@ -1694,7 +1741,6 @@ local function AddRow(self, height, clip)
         ClipsDescendants = clip or false,
     })
     Corner(row, 6)
-    -- No stroke - cleaner
     return row
 end
 
