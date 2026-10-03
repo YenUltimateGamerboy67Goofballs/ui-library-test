@@ -643,7 +643,7 @@ function VexUI:ShowChangelog(opts)
         Improved = "sparkles",
         Changed = "refresh-cw",
         Fixed = "wrench",
-        Removed = "trash-2",
+        Removed = "minus",
     }
     local typeOrder = { "Added", "Improved", "Changed", "Fixed", "Removed" }
 
