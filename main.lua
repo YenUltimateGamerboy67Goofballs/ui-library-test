@@ -1,35 +1,5 @@
 --[[
     VexUI v2 - Dashboard-Style UI Library mit Lucide-Icons
-
-    local Library = loadstring(game:HttpGet("DEINE_RAW_URL"))()
-
-    local Window = Library:CreateWindow({
-        Title = "Hidden - Fisch",
-        Subtitle = ".gg/deinserver",
-        Icon = "moon",
-    })
-
-    local Home = Window:AddHomeTab({
-        Discord = "discord.gg/DEININVITE",
-        RequiredFunctions = { "loadstring", "request" },
-    })
-
-    local Main = Window:AddTab("Main", "code")
-    local Box = Main:AddLeftGroupbox("Combat", "swords")
-    Box:AddToggle("AutoFarm", { Text = "Auto Farm", Default = false, Callback = function(v) print(v) end })
-    Box:AddSlider("Speed", { Text = "Speed", Min = 0, Max = 100, Default = 50, Suffix = "%" })
-    Box:AddDropdown("Mode", { Text = "Mode", Values = { "Legit", "Rage" } })
-    Box:AddButton("Test", { Icon = "zap", Callback = function() Library:Notify({ Title = "Hi", Description = "Klappt" }) end })
-
-    Window:AddSettingsTab()
-
-    Zugriff auf Werte (wie Obsidian):
-        Library.Toggles.AutoFarm.Value
-        Library.Options.Speed.Value
-        Library.Toggles.AutoFarm:OnChanged(function(v) end)
-        Library.Toggles.AutoFarm:SetValue(true)
-
-    Icons: https://lucide.dev/icons
 ]]
 
 local VexUI = {
@@ -40,7 +10,6 @@ local VexUI = {
 }
 VexUI.__index = VexUI
 
--- ============ SERVICES ============
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -68,8 +37,10 @@ local Theme = {
     Background = Color3.fromRGB(10, 10, 13),
     Secondary = Color3.fromRGB(16, 16, 20),
     Tertiary = Color3.fromRGB(24, 24, 29),
-    Card = Color3.fromRGB(7, 7, 9),
+    Card = Color3.fromRGB(14, 14, 18),
+    Groupbox = Color3.fromRGB(18, 18, 22),       -- subtle groupbox bg, no border
     Border = Color3.fromRGB(42, 42, 50),
+    BorderSubtle = Color3.fromRGB(32, 32, 38),
     Text = Color3.fromRGB(235, 235, 240),
     SubText = Color3.fromRGB(140, 140, 155),
     Accent = Color3.fromRGB(200, 30, 40),
@@ -194,20 +165,55 @@ local function Copy(text)
     return false
 end
 
+-- ============ DRAGGABLE (with smooth animation) ============
 local function MakeDraggable(frame, handle, getScale)
-    local state = { Moved = 0 }
+    local state = { Moved = 0, Dragging = false }
     local dragging, dragStart, startPos
 
     handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
+            state.Dragging = true
             state.Moved = 0
             dragStart = input.Position
             startPos = frame.Position
+
+            -- Smooth "pick up" animation
+            Tween(frame, 0.22, {
+                Size = UDim2.new(
+                    frame.Size.X.Scale,
+                    frame.Size.X.Offset + 6,
+                    frame.Size.Y.Scale,
+                    frame.Size.Y.Offset + 6
+                ),
+                Position = UDim2.new(
+                    startPos.X.Scale,
+                    startPos.X.Offset - 3,
+                    startPos.Y.Scale,
+                    startPos.Y.Offset - 3
+                ),
+            }, Enum.EasingStyle.Quint)
+
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
+                    state.Dragging = false
+                    -- Smooth "drop" animation
+                    Tween(frame, 0.28, {
+                        Size = UDim2.new(
+                            frame.Size.X.Scale,
+                            frame.Size.X.Offset - 6,
+                            frame.Size.Y.Scale,
+                            frame.Size.Y.Offset - 6
+                        ),
+                        Position = UDim2.new(
+                            frame.Position.X.Scale,
+                            frame.Position.X.Offset + 3,
+                            frame.Position.Y.Scale,
+                            frame.Position.Y.Offset + 3
+                        ),
+                    }, Enum.EasingStyle.Quint)
                 end
             end)
         end
@@ -219,9 +225,11 @@ local function MakeDraggable(frame, handle, getScale)
             local s = getScale and getScale() or 1
             local d = (input.Position - dragStart) / s
             state.Moved = math.max(state.Moved, d.Magnitude)
+
+            -- Keep the +3 offset from the "pick up" animation
             frame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + d.X,
-                startPos.Y.Scale, startPos.Y.Offset + d.Y
+                startPos.X.Scale, startPos.X.Offset - 3 + d.X,
+                startPos.Y.Scale, startPos.Y.Offset - 3 + d.Y
             )
         end
     end)
@@ -465,7 +473,6 @@ function VexUI:Notify(opts)
     Corner(notif, 8)
     Stroke(notif, Theme.Border, 1)
 
-    -- FIXED: Roter Balken - freistehender Pill, vertikal zentriert, 12px oben/unten Abstand
     local accent = Create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
@@ -515,7 +522,7 @@ function VexUI:Notify(opts)
     end)
 end
 
--- ============ KONFIG SPEICHERN / LADEN ============
+-- ============ CONFIG ============
 local ConfigFolder = "VexUI/configs"
 
 local function HasFS()
@@ -523,21 +530,13 @@ local function HasFS()
 end
 
 local function EnsureFolders()
-    if not isfolder("VexUI") then
-        makefolder("VexUI")
-    end
-    if not isfolder(ConfigFolder) then
-        makefolder(ConfigFolder)
-    end
+    if not isfolder("VexUI") then makefolder("VexUI") end
+    if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
 end
 
 function VexUI:SaveConfig(name)
-    if not name or name == "" then
-        return false, "Kein Name angegeben"
-    end
-    if not HasFS() then
-        return false, "Executor unterstuetzt keine Dateifunktionen"
-    end
+    if not name or name == "" then return false, "Kein Name" end
+    if not HasFS() then return false, "Keine Dateifunktionen" end
 
     local data = {}
     for id, o in pairs(self.Toggles) do
@@ -563,23 +562,15 @@ function VexUI:SaveConfig(name)
 end
 
 function VexUI:LoadConfig(name)
-    if not name or name == "" then
-        return false, "Kein Name angegeben"
-    end
-    if not HasFS() then
-        return false, "Executor unterstuetzt keine Dateifunktionen"
-    end
+    if not name or name == "" then return false, "Kein Name" end
+    if not HasFS() then return false, "Keine Dateifunktionen" end
     local path = ConfigFolder .. "/" .. name .. ".json"
-    if not isfile(path) then
-        return false, "Config nicht gefunden"
-    end
+    if not isfile(path) then return false, "Nicht gefunden" end
 
     local ok, data = pcall(function()
         return HttpService:JSONDecode(readfile(path))
     end)
-    if not ok or type(data) ~= "table" then
-        return false, "Config ist beschaedigt"
-    end
+    if not ok or type(data) ~= "table" then return false, "Beschaedigt" end
 
     for id, entry in pairs(data) do
         local o = self.Toggles[id] or self.Options[id]
@@ -596,45 +587,32 @@ end
 
 function VexUI:ListConfigs()
     local out = {}
-    if not (HasFS() and listfiles) then
-        return out
-    end
+    if not (HasFS() and listfiles) then return out end
     pcall(function()
         EnsureFolders()
         for _, path in ipairs(listfiles(ConfigFolder)) do
             local n = path:match("([^/\\]+)%.json$")
-            if n then
-                table.insert(out, n)
-            end
+            if n then table.insert(out, n) end
         end
     end)
     table.sort(out)
     return out
 end
 
--- ============ UNLOAD ============
 function VexUI:Unload()
     self.Unloaded = true
     for _, c in ipairs(Connections) do
-        pcall(function()
-            c:Disconnect()
-        end)
+        pcall(function() c:Disconnect() end)
     end
     table.clear(Connections)
-    if self.Gui then
-        self.Gui:Destroy()
-    end
-    if self.NotifGui then
-        self.NotifGui:Destroy()
-    end
+    if self.Gui then self.Gui:Destroy() end
+    if self.NotifGui then self.NotifGui:Destroy() end
     table.clear(self.Toggles)
     table.clear(self.Options)
-    if GENV.VexUI_Instance == self then
-        GENV.VexUI_Instance = nil
-    end
+    if GENV.VexUI_Instance == self then GENV.VexUI_Instance = nil end
 end
 
--- ============ KARTEN-HELFER ============
+-- ============ HELPERS ============
 local AvatarCache
 
 local function LoadAvatar(img)
@@ -642,9 +620,7 @@ local function LoadAvatar(img)
         if not AvatarCache then
             local ok, url = pcall(Players.GetUserThumbnailAsync, Players, LocalPlayer.UserId,
                 Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-            if ok then
-                AvatarCache = url
-            end
+            if ok then AvatarCache = url end
         end
         if AvatarCache and img.Parent then
             img.Image = AvatarCache
@@ -652,6 +628,7 @@ local function LoadAvatar(img)
     end)
 end
 
+-- Card with NO border - just darker background
 local function Card(parent, size, bg, class)
     local isButton = class == "TextButton"
     local f = Create(class or "Frame", {
@@ -665,7 +642,7 @@ local function Card(parent, size, bg, class)
         f.AutoButtonColor = false
     end
     Corner(f, 10)
-    Stroke(f, Theme.Border, 1)
+    -- NO STROKE - cleaner look
     return f
 end
 
@@ -718,8 +695,7 @@ end
 
 local function StatTile(row, order, title, value, wScale, onClick)
     local btn = Create("TextButton", {
-        BackgroundColor3 = Color3.fromRGB(22, 22, 27),
-        BackgroundTransparency = 0.15,
+        BackgroundColor3 = Color3.fromRGB(26, 26, 32),
         BorderSizePixel = 0,
         Size = UDim2.new(wScale, -3, 1, 0),
         LayoutOrder = order,
@@ -728,7 +704,7 @@ local function StatTile(row, order, title, value, wScale, onClick)
         Parent = row,
     })
     Corner(btn, 8)
-    local strk = Stroke(btn, Theme.Border, 1)
+    -- No stroke
 
     local holder = Create("Frame", {
         BackgroundTransparency = 1,
@@ -769,10 +745,10 @@ local function StatTile(row, order, title, value, wScale, onClick)
 
     if onClick then
         btn.MouseEnter:Connect(function()
-            Tween(strk, 0.15, { Color = Theme.Accent })
+            Tween(btn, 0.15, { BackgroundColor3 = Color3.fromRGB(34, 34, 42) })
         end)
         btn.MouseLeave:Connect(function()
-            Tween(strk, 0.15, { Color = Theme.Border })
+            Tween(btn, 0.15, { BackgroundColor3 = Color3.fromRGB(26, 26, 32) })
         end)
         btn.MouseButton1Click:Connect(function()
             task.spawn(onClick)
@@ -781,9 +757,7 @@ local function StatTile(row, order, title, value, wScale, onClick)
 
     return {
         Button = btn,
-        Set = function(text)
-            valueLabel.Text = text
-        end,
+        Set = function(text) valueLabel.Text = text end,
     }
 end
 
@@ -817,9 +791,7 @@ local function GetPing()
 end
 
 local function GetExecutorName()
-    local ok, name = pcall(function()
-        return identifyexecutor()
-    end)
+    local ok, name = pcall(function() return identifyexecutor() end)
     return (ok and name) or "Unknown executor"
 end
 
@@ -843,7 +815,8 @@ function VexUI:CreateWindow(opts)
         Parent = gui,
     })
     Corner(main, 12)
-    Stroke(main, Theme.Border, 1)
+    -- Subtle border kept (main window)
+    Stroke(main, Theme.BorderSubtle, 1)
     local uiScale = Create("UIScale", { Parent = main })
 
     local topBar = Create("Frame", {
@@ -927,7 +900,7 @@ function VexUI:CreateWindow(opts)
             Parent = btnHolder,
         })
         Corner(b, 8)
-        local s = Stroke(b, Theme.Border, 1)
+        local s = Stroke(b, Theme.BorderSubtle, 1)
         local ic = NewIcon(b, icon, 14, Theme.SubText, fallback)
         ic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
         ic.Instance.Position = UDim2.fromScale(0.5, 0.5)
@@ -937,7 +910,7 @@ function VexUI:CreateWindow(opts)
         end)
         b.MouseLeave:Connect(function()
             TintIcon(ic, Theme.SubText)
-            Tween(s, 0.15, { Color = Theme.Border })
+            Tween(s, 0.15, { Color = Theme.BorderSubtle })
         end)
         return b
     end
@@ -960,7 +933,7 @@ function VexUI:CreateWindow(opts)
         Parent = body,
     })
     Create("Frame", {
-        BackgroundColor3 = Theme.Border,
+        BackgroundColor3 = Theme.BorderSubtle,
         BorderSizePixel = 0,
         Position = UDim2.new(1, -1, 0, 0),
         Size = UDim2.new(0, 1, 1, 0),
@@ -1001,12 +974,10 @@ function VexUI:CreateWindow(opts)
         Parent = sidebar,
     })
     Corner(avatarBtn, 10)
-    Stroke(avatarBtn, Theme.Border, 1)
+    Stroke(avatarBtn, Theme.BorderSubtle, 1)
     LoadAvatar(avatarBtn)
 
-    MakeDraggable(main, topBar, function()
-        return uiScale.Scale
-    end)
+    MakeDraggable(main, topBar, function() return uiScale.Scale end)
 
     local windowObj = setmetatable({
         Gui = gui,
@@ -1027,9 +998,7 @@ function VexUI:CreateWindow(opts)
 
     local function updateScale()
         local cam = workspace.CurrentCamera
-        if not cam then
-            return
-        end
+        if not cam then return end
         local vp = cam.ViewportSize
         local fit = math.min((vp.X - 24) / math.max(size.X.Offset, 1), (vp.Y - 24) / math.max(size.Y.Offset, 1))
         uiScale.Scale = math.clamp(math.min(opts.Scale or 1, fit), 0.5, 2)
@@ -1052,22 +1021,20 @@ function VexUI:CreateWindow(opts)
     minBtn.MouseButton1Click:Connect(function()
         windowObj.Minimized = not windowObj.Minimized
         if windowObj.Minimized then
-            Tween(main, 0.2, { Size = UDim2.new(size.X.Scale, size.X.Offset, 0, 46) })
+            Tween(main, 0.25, {
+                Size = UDim2.new(size.X.Scale, size.X.Offset, 0, 46)
+            }, Enum.EasingStyle.Quint)
             task.delay(0.2, function()
-                if windowObj.Minimized then
-                    body.Visible = false
-                end
+                if windowObj.Minimized then body.Visible = false end
             end)
         else
             body.Visible = true
-            Tween(main, 0.2, { Size = size })
+            Tween(main, 0.25, { Size = size }, Enum.EasingStyle.Quint)
         end
     end)
 
     Connect(UserInputService.InputBegan, function(input, gpe)
-        if gpe then
-            return
-        end
+        if gpe then return end
         if input.KeyCode == windowObj.ToggleKeybind then
             windowObj:Toggle()
         end
@@ -1088,7 +1055,7 @@ function VexUI:CreateWindow(opts)
             Parent = gui,
         })
         Corner(fb, 12)
-        Stroke(fb, Theme.Border, 1)
+        Stroke(fb, Theme.BorderSubtle, 1)
         local fic = NewIcon(fb, opts.Icon or "moon", 22, Theme.Accent, "V")
         fic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
         fic.Instance.Position = UDim2.fromScale(0.5, 0.5)
@@ -1140,7 +1107,7 @@ function Window:AddTab(name, icon)
         Parent = self.TabBar,
     })
     Corner(btn, 10)
-    local strk = Stroke(btn, Theme.Border, 1)
+    local strk = Stroke(btn, Theme.BorderSubtle, 1)
     strk.Transparency = 1
 
     local ic = NewIcon(btn, icon, 20, Theme.SubText, string.upper(string.sub(name, 1, 1)))
@@ -1162,7 +1129,6 @@ function Window:AddTab(name, icon)
         Parent = btn,
     })
     Corner(tip, 6)
-    Stroke(tip, Theme.Border, 1)
     Create("UIPadding", {
         PaddingLeft = UDim.new(0, 8),
         PaddingRight = UDim.new(0, 8),
@@ -1196,7 +1162,7 @@ function Window:AddTab(name, icon)
             CanvasSize = UDim2.new(0, 0, 0, 0),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             ScrollBarThickness = 2,
-            ScrollBarImageColor3 = Theme.Border,
+            ScrollBarImageColor3 = Theme.BorderSubtle,
             ScrollingDirection = Enum.ScrollingDirection.Y,
             Parent = frame,
         })
@@ -1244,9 +1210,7 @@ function Window:AddTab(name, icon)
 end
 
 function Window:SelectTab(tab)
-    if self.ActiveTab == tab then
-        return
-    end
+    if self.ActiveTab == tab then return end
     for _, t in ipairs(self.Tabs) do
         t.Frame.Visible = false
         t:_SetActive(false)
@@ -1256,7 +1220,7 @@ function Window:SelectTab(tab)
     tab:_SetActive(true)
 end
 
--- ============ HOME-DASHBOARD ============
+-- ============ HOME TAB ============
 function Window:AddHomeTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Home", opts.Icon or "house")
@@ -1273,7 +1237,6 @@ function Window:AddHomeTab(opts)
         Parent = page,
     })
     Corner(avatarBox, 12)
-    Stroke(avatarBox, Theme.Border, 1)
     LoadAvatar(avatarBox)
 
     local header = Card(page, UDim2.new(1, -72, 0, 64), Theme.Card)
@@ -1335,7 +1298,7 @@ function Window:AddHomeTab(opts)
     local hasDiscord = opts.Discord ~= nil and opts.Discord ~= ""
     local server = Card(left, hasDiscord and UDim2.new(1, 0, 0.72, -4) or UDim2.new(1, 0, 1, 0), Theme.Card)
     server.LayoutOrder = 1
-    Glow(server, Theme.Success, -45, 0.3)
+    Glow(server, Theme.Success, -45, 0.25)
     CardText(server, "Server", "Information on the session you're currently in")
 
     local grid = Create("Frame", {
@@ -1456,7 +1419,7 @@ function Window:AddHomeTab(opts)
 
     local friends = Card(right, UDim2.new(1, 0, 0.7, -4), Theme.Card)
     friends.LayoutOrder = 2
-    Glow(friends, Theme.Warning, -135, 0.25)
+    Glow(friends, Theme.Warning, -135, 0.2)
     CardText(friends, "Friends", "Find out what your friends are currently doing", 17, 0.62)
 
     local fgrid = Create("Frame", {
@@ -1489,9 +1452,7 @@ function Window:AddHomeTab(opts)
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer then
                     local ok, isFriend = pcall(LocalPlayer.IsFriendsWith, LocalPlayer, p.UserId)
-                    if ok and isFriend then
-                        inServer = inServer + 1
-                    end
+                    if ok and isFriend then inServer = inServer + 1 end
                 end
             end
 
@@ -1499,9 +1460,7 @@ function Window:AddHomeTab(opts)
             local okOn, list = pcall(function()
                 return LocalPlayer:GetFriendsOnline(200)
             end)
-            if okOn and type(list) == "table" then
-                online = #list
-            end
+            if okOn and type(list) == "table" then online = #list end
 
             local total = 0
             local okAll, pages = pcall(Players.GetFriendsAsync, Players, LocalPlayer.UserId)
@@ -1509,9 +1468,7 @@ function Window:AddHomeTab(opts)
                 pcall(function()
                     while true do
                         total = total + #pages:GetCurrentPage()
-                        if pages.IsFinished then
-                            break
-                        end
+                        if pages.IsFinished then break end
                         pages:AdvanceToNextPageAsync()
                     end
                 end)
@@ -1535,9 +1492,7 @@ function Window:AddHomeTab(opts)
         local n = 0
         while self.Alive and not VexUI.Unloaded do
             pcall(refreshLive)
-            if n % 60 == 0 then
-                refreshFriends()
-            end
+            if n % 60 == 0 then refreshFriends() end
             n = n + 1
             task.wait(1)
         end
@@ -1550,7 +1505,7 @@ function Window:AddHomeTab(opts)
     return tab
 end
 
--- ============ SETTINGS-TAB ============
+-- ============ SETTINGS TAB ============
 function Window:AddSettingsTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Settings", opts.Icon or "settings")
@@ -1564,15 +1519,11 @@ function Window:AddSettingsTab(opts)
         local ok, key = pcall(function()
             return Enum.KeyCode[keyName]
         end)
-        if ok and key then
-            self.ToggleKeybind = key
-        end
+        if ok and key then self.ToggleKeybind = key end
     end)
     menu:AddButton("Unload UI", {
         Icon = "power",
-        Callback = function()
-            VexUI:Unload()
-        end,
+        Callback = function() VexUI:Unload() end,
     })
 
     local cfg = tab:AddRightGroupbox("Config", "save")
@@ -1581,9 +1532,7 @@ function Window:AddSettingsTab(opts)
 
     local function currentName()
         local n = nameBox.Get()
-        if n == "" then
-            n = list.Get()
-        end
+        if n == "" then n = list.Get() end
         return n
     end
 
@@ -1614,9 +1563,7 @@ function Window:AddSettingsTab(opts)
     })
     cfg:AddButton("Refresh list", {
         Icon = "refresh-cw",
-        Callback = function()
-            list.Refresh(VexUI:ListConfigs())
-        end,
+        Callback = function() list.Refresh(VexUI:ListConfigs()) end,
     })
 
     return tab
@@ -1637,6 +1584,7 @@ function Tab:AddRightGroupbox(name, icon)
     return self:_AddGroupbox(name, icon, self.Right)
 end
 
+-- *** GROUPBOX: NO border, just background + header divider ***
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({
         Name = name,
@@ -1647,33 +1595,35 @@ function Tab:_AddGroupbox(name, icon, column)
 
     local frame = Create("Frame", {
         Name = name,
-        BackgroundColor3 = Theme.Secondary,
+        BackgroundColor3 = Theme.Groupbox,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         LayoutOrder = #self.Groupboxes + 1,
         Parent = column,
     })
-    Corner(frame, 8)
-    Stroke(frame, Theme.Border, 1)
+    Corner(frame, 10)
+    -- NO STROKE - clean minimal look
+
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
 
+    -- Header
     local titleFrame = Create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, 0, 0, 36),
         LayoutOrder = 1,
         Parent = frame,
     })
-    local x = 12
+    local x = 14
     if icon then
-        local ic = NewIcon(titleFrame, icon, 16, Theme.Accent, "")
-        ic.Instance.Position = UDim2.new(0, 12, 0.5, -8)
-        x = 34
+        local ic = NewIcon(titleFrame, icon, 15, Theme.Accent, "")
+        ic.Instance.Position = UDim2.new(0, 14, 0.5, -7)
+        x = 36
     end
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, x, 0, 0),
-        Size = UDim2.new(1, -x - 12, 1, 0),
+        Size = UDim2.new(1, -x - 14, 1, 0),
         Font = Theme.FontBold,
         Text = name,
         TextColor3 = Theme.Text,
@@ -1681,9 +1631,20 @@ function Tab:_AddGroupbox(name, icon, column)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = titleFrame,
     })
-    Create("Frame", {
+
+    -- Only THIS divider line under header
+    local divider = Create("Frame", {
         BackgroundColor3 = Theme.Border,
+        BackgroundTransparency = 0.4,
         BorderSizePixel = 0,
+        Size = UDim2.new(1, -20, 0, 1),
+        Position = UDim2.new(0, 10, 0, 36),
+        LayoutOrder = 2,
+        Parent = frame,
+    })
+    -- spacer so content goes below divider
+    Create("Frame", {
+        BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 1),
         LayoutOrder = 2,
         Parent = frame,
@@ -1703,7 +1664,7 @@ function Tab:_AddGroupbox(name, icon, column)
         Parent = container,
     })
     Create("UIPadding", {
-        PaddingTop = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 8),
         PaddingLeft = UDim.new(0, 10),
         PaddingRight = UDim.new(0, 10),
         PaddingBottom = UDim.new(0, 10),
@@ -1717,7 +1678,7 @@ function Tab:_AddGroupbox(name, icon, column)
     return box
 end
 
--- ============ GROUPBOX ============
+-- ============ GROUPBOX ELEMENTS ============
 local function Add(self, className, props)
     self._n = self._n + 1
     props.LayoutOrder = self._n
@@ -1733,7 +1694,7 @@ local function AddRow(self, height, clip)
         ClipsDescendants = clip or false,
     })
     Corner(row, 6)
-    Stroke(row, Theme.Border, 1)
+    -- No stroke - cleaner
     return row
 end
 
@@ -1764,6 +1725,7 @@ end
 function Groupbox:AddDivider()
     return Add(self, "Frame", {
         BackgroundColor3 = Theme.Border,
+        BackgroundTransparency = 0.5,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 1),
     })
@@ -1801,7 +1763,6 @@ function Groupbox:AddButton(name, opts)
         AutoButtonColor = false,
     })
     Corner(btn, 6)
-    local strk = Stroke(btn, Theme.Border, 1)
 
     if opts.Icon then
         local ic = NewIcon(btn, opts.Icon, 16, Theme.Text, "")
@@ -1810,11 +1771,9 @@ function Groupbox:AddButton(name, opts)
 
     btn.MouseEnter:Connect(function()
         Tween(btn, 0.15, { BackgroundColor3 = Theme.Accent })
-        Tween(strk, 0.15, { Color = Theme.Accent })
     end)
     btn.MouseLeave:Connect(function()
         Tween(btn, 0.15, { BackgroundColor3 = Theme.Tertiary })
-        Tween(strk, 0.15, { Color = Theme.Border })
     end)
     btn.MouseButton1Click:Connect(function()
         task.spawn(callback)
@@ -1865,12 +1824,8 @@ function Groupbox:AddToggle(id, opts)
 
     obj.Container = row
     obj.Set = setState
-    obj.Get = function()
-        return state
-    end
-    function obj:SetValue(v)
-        setState(v)
-    end
+    obj.Get = function() return state end
+    function obj:SetValue(v) setState(v) end
     return obj
 end
 
@@ -1962,15 +1917,9 @@ function Groupbox:AddSlider(id, opts)
         setValue(min + range * rel)
     end)
 
-    obj.Set = function(v)
-        setValue(v, 0.1)
-    end
-    obj.Get = function()
-        return value
-    end
-    function obj:SetValue(v)
-        setValue(v, 0.1)
-    end
+    obj.Set = function(v) setValue(v, 0.1) end
+    obj.Get = function() return value end
+    function obj:SetValue(v) setValue(v, 0.1) end
     return obj
 end
 
@@ -2035,9 +1984,7 @@ function Groupbox:AddDropdown(id, opts)
             Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, 34) })
             Tween(list, 0.18, { Size = UDim2.new(1, -12, 0, 0) })
             task.delay(0.18, function()
-                if not open then
-                    list.Visible = false
-                end
+                if not open then list.Visible = false end
             end)
         end
     end
@@ -2053,9 +2000,7 @@ function Groupbox:AddDropdown(id, opts)
     end
 
     local function refresh()
-        for _, b in ipairs(buttons) do
-            b:Destroy()
-        end
+        for _, b in ipairs(buttons) do b:Destroy() end
         buttons = {}
         for i, val in ipairs(values) do
             local option = Create("TextButton", {
@@ -2089,27 +2034,17 @@ function Groupbox:AddDropdown(id, opts)
     end
     refresh()
 
-    hit.MouseButton1Click:Connect(function()
-        setOpen(not open)
-    end)
+    hit.MouseButton1Click:Connect(function() setOpen(not open) end)
 
     obj.Container = row
-    obj.Set = function(v)
-        select(v)
-    end
-    obj.Get = function()
-        return current
-    end
+    obj.Set = function(v) select(v) end
+    obj.Get = function() return current end
     obj.Refresh = function(newValues)
         values = newValues
         refresh()
-        if open then
-            setOpen(true)
-        end
+        if open then setOpen(true) end
     end
-    function obj:SetValue(v)
-        select(v)
-    end
+    function obj:SetValue(v) select(v) end
     return obj
 end
 
@@ -2157,12 +2092,8 @@ function Groupbox:AddTextbox(id, opts)
         changed(box.Text)
         task.spawn(callback, box.Text)
     end
-    obj.Get = function()
-        return box.Text
-    end
-    function obj:SetValue(t)
-        obj.Set(t)
-    end
+    obj.Get = function() return box.Text end
+    function obj:SetValue(t) obj.Set(t) end
     return obj
 end
 
@@ -2186,7 +2117,7 @@ function Groupbox:AddColorPicker(id, opts)
         Parent = row,
     })
     Corner(swatch, 4)
-    Stroke(swatch, Theme.Border, 1)
+    Stroke(swatch, Theme.BorderSubtle, 1)
     local hit = HitButton(row, 34)
 
     local area = Create("Frame", {
@@ -2288,12 +2219,8 @@ function Groupbox:AddColorPicker(id, opts)
         h, s, v = Color3.toHSV(c)
         commit()
     end
-    obj.Get = function()
-        return color
-    end
-    function obj:SetValue(c)
-        obj.Set(c)
-    end
+    obj.Get = function() return color end
+    function obj:SetValue(c) obj.Set(c) end
     return obj
 end
 
@@ -2321,7 +2248,6 @@ function Groupbox:AddKeyPicker(id, opts)
         Parent = row,
     })
     Corner(keyLabel, 4)
-    Stroke(keyLabel, Theme.Border, 1)
 
     keyLabel.MouseButton1Click:Connect(function()
         listening = true
@@ -2329,9 +2255,7 @@ function Groupbox:AddKeyPicker(id, opts)
     end)
 
     Connect(UserInputService.InputBegan, function(input, gpe)
-        if gpe then
-            return
-        end
+        if gpe then return end
         if listening then
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 listening = false
@@ -2352,12 +2276,8 @@ function Groupbox:AddKeyPicker(id, opts)
         keyLabel.Text = k
         changed(k)
     end
-    obj.Get = function()
-        return current
-    end
-    function obj:SetValue(k)
-        obj.Set(k)
-    end
+    obj.Get = function() return current end
+    function obj:SetValue(k) obj.Set(k) end
     return obj
 end
 
