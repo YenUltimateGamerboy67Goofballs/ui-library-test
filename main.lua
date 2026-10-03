@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "changelog-fix-3"
+VexUI.Build = "home-changelog-4"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -496,6 +496,15 @@ function VexUI:ShowChangelog(opts)
     local entries = opts.Entries or {}
     local discord = opts.Discord
 
+    -- Letzten Changelog merken (ohne OnClose), damit der Home-Tab ihn wieder oeffnen kann
+    local stored = {}
+    for k, v in pairs(opts) do
+        if k ~= "OnClose" then
+            stored[k] = v
+        end
+    end
+    VexUI._LastChangelog = stored
+
     if VexUI._ChangelogGui and VexUI._ChangelogGui.Parent then
         VexUI._ChangelogGui:Destroy()
     end
@@ -623,7 +632,7 @@ function VexUI:ShowChangelog(opts)
         Improved = "sparkles",
         Changed = "refresh-cw",
         Fixed = "wrench",
-        Removed = "trash-2",
+        Removed = "minus",
     }
     local typeOrder = { "Added", "Improved", "Changed", "Fixed", "Removed" }
 
@@ -1654,7 +1663,10 @@ function Window:AddHomeTab(opts)
     local right = ColumnFrame(UDim2.new(0.5, 4, 0, 0))
 
     local hasDiscord = opts.Discord ~= nil and opts.Discord ~= ""
-    local server = Card(left, hasDiscord and UDim2.new(1, 0, 0.72, -4) or UDim2.new(1, 0, 1, 0), Theme.Card)
+    local cl = opts.Changelog or VexUI._LastChangelog
+    local hasChangelog = type(cl) == "table"
+    local hasBottom = hasDiscord or hasChangelog
+    local server = Card(left, hasBottom and UDim2.new(1, 0, 0.72, -4) or UDim2.new(1, 0, 1, 0), Theme.Card)
     server.LayoutOrder = 1
     Glow(server, Theme.Success, -45, 0.3)
     CardText(server, "Server", "Information on the session you're currently in")
@@ -1691,9 +1703,27 @@ function Window:AddHomeTab(opts)
     local tTime = StatTile(r3, 1, "In server for", "00:00:00", 0.42)
     StatTile(r3, 2, "Join Script", "Tap to copy join script", 0.58, joinScript)
 
+    local bottom
+    if hasBottom then
+        bottom = Create("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0.28, -4),
+            LayoutOrder = 2,
+            Parent = left,
+        })
+        Create("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 8),
+            Parent = bottom,
+        })
+    end
+    local bothCards = hasDiscord and hasChangelog
+    local cardW = bothCards and UDim2.new(0.5, -4, 1, 0) or UDim2.new(1, 0, 1, 0)
+
     if hasDiscord then
-        local dc = Card(left, UDim2.new(1, 0, 0.28, -4), Color3.new(1, 1, 1), "TextButton")
-        dc.LayoutOrder = 2
+        local dc = Card(bottom, cardW, Color3.new(1, 1, 1), "TextButton")
+        dc.LayoutOrder = 1
         Gradient(dc, {
             { 0, Color3.fromRGB(84, 98, 240) },
             { 0.55, Color3.fromRGB(52, 32, 112) },
@@ -1722,7 +1752,7 @@ function Window:AddHomeTab(opts)
             Size = UDim2.new(1, -14, 0, 16),
             LayoutOrder = 2,
             Font = Theme.Font,
-            Text = "Tap to join the Discord Server",
+            Text = bothCards and "Tap to join" or "Tap to join the Discord Server",
             TextColor3 = Color3.fromRGB(215, 218, 255),
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left,
@@ -1730,6 +1760,36 @@ function Window:AddHomeTab(opts)
         })
         dc.MouseButton1Click:Connect(function()
             task.spawn(JoinDiscord, opts.Discord)
+        end)
+    end
+
+    if hasChangelog then
+        local cc = Card(bottom, cardW, Theme.Card, "TextButton")
+        cc.LayoutOrder = 2
+        local ccStroke = cc:FindFirstChildOfClass("UIStroke")
+        Glow(cc, Theme.Accent, -45, 0.25)
+
+        local count = type(cl.Entries) == "table" and #cl.Entries or 0
+        CardText(cc, "Changelog", "Version " .. tostring(cl.Version or VexUI.Version) .. " - " .. Plural(count, "change"), 19)
+
+        local cIcon = NewIcon(cc, "scroll-text", 18, Theme.Accent, "•")
+        cIcon.Instance.Position = UDim2.new(1, -32, 0, 12)
+        cIcon.Instance.ZIndex = 2
+
+        cc.MouseEnter:Connect(function()
+            Tween(ccStroke, 0.15, { Color = Theme.Accent })
+        end)
+        cc.MouseLeave:Connect(function()
+            Tween(ccStroke, 0.15, { Color = Theme.Border })
+        end)
+        cc.MouseButton1Click:Connect(function()
+            local data = {}
+            for k, v in pairs(cl) do
+                if k ~= "OnClose" then
+                    data[k] = v
+                end
+            end
+            VexUI:ShowChangelog(data)
         end)
     end
 
