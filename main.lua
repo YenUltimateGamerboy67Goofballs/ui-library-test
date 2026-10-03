@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "logo-5"
+VexUI.Build = "logo-6"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -827,7 +827,7 @@ function VexUI:ShowChangelog(opts)
     -- ============ ENTRANCE / DRAG / CLOSE ============
     Tween(uiScale, 0.2, { Scale = targetScale })
 
-    local dragState = MakeDraggable(main, topBar, function()
+    MakeDraggable(main, topBar, function()
         return uiScale.Scale
     end)
 
@@ -845,11 +845,7 @@ function VexUI:ShowChangelog(opts)
         end
     end
 
-    closeBtn.MouseButton1Click:Connect(function()
-        if dragState.Moved < 8 then
-            close()
-        end
-    end)
+    closeBtn.MouseButton1Click:Connect(close)
     okBtn.MouseButton1Click:Connect(close)
 end
 
@@ -1204,11 +1200,12 @@ function VexUI:CreateWindow(opts)
     -- Logo: eigene rbxassetid (opts.Logo) wird groesser und ohne Faerbung angezeigt
     local logoSrc = opts.Logo or opts.Icon or "moon"
     local customLogo = IsCustomImage(logoSrc)
-    local logoPx = customLogo and 32 or 22
+    local logoPx = math.clamp(opts.LogoSize or (customLogo and 32 or 22), 12, 44)
+    local logoX = customLogo and 12 or 16
     local logo = NewIcon(topBar, logoSrc, logoPx, customLogo and Color3.new(1, 1, 1) or Theme.Accent, "V")
     logo.Instance.AnchorPoint = Vector2.new(0, 0.5)
-    logo.Instance.Position = UDim2.new(0, customLogo and 12 or 16, 0.5, 0)
-    local titleX = customLogo and 52 or 48
+    logo.Instance.Position = UDim2.new(0, logoX, 0.5, 0)
+    local titleX = logoX + logoPx + 10
 
     local titleHolder = Create("Frame", {
         BackgroundTransparency = 1,
@@ -1371,6 +1368,9 @@ function VexUI:CreateWindow(opts)
         Alive = true,
         Size = size,
     }, Window)
+    windowObj.Logo = logo
+    windowObj.TitleHolder = titleHolder
+    windowObj._logoX = logoX
 
     local function updateScale()
         local cam = workspace.CurrentCamera
@@ -1453,6 +1453,15 @@ end
 
 function Window:Toggle()
     self.Main.Visible = not self.Main.Visible
+end
+
+function Window:SetLogoSize(px)
+    px = math.clamp(tonumber(px) or 32, 12, 44)
+    local inst = self.Logo.Instance
+    inst.Size = UDim2.fromOffset(px, px)
+    local titleX = self._logoX + px + 10
+    self.TitleHolder.Position = UDim2.new(0, titleX, 0, 0)
+    self.TitleHolder.Size = UDim2.new(1, -(titleX + 122), 1, 0)
 end
 
 function Window:Notify(opts)
