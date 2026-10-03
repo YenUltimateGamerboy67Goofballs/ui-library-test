@@ -1,15 +1,18 @@
-
-
+--[[
+    VexUI - Modern Dashboard UI Library
+    Version 2.0
+]]
 
 local VexUI = {
-    Version = "1.0.0",
+    Version = "2.0.0",
     Toggles = {},
     Options = {},
     CustomIcons = {},
 }
+
 VexUI.__index = VexUI
 
---  SERVICES 
+-- ============ SERVICES ============
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -32,13 +35,14 @@ Tab.__index = Tab
 local Groupbox = {}
 Groupbox.__index = Groupbox
 
---  THEME 
+-- ============ THEME ============
 local Theme = {
     Background = Color3.fromRGB(10, 10, 13),
     Secondary = Color3.fromRGB(16, 16, 20),
     Tertiary = Color3.fromRGB(24, 24, 29),
     Card = Color3.fromRGB(7, 7, 9),
     Border = Color3.fromRGB(42, 42, 50),
+    BorderLight = Color3.fromRGB(55, 55, 65),
     Text = Color3.fromRGB(235, 235, 240),
     SubText = Color3.fromRGB(140, 140, 155),
     Accent = Color3.fromRGB(200, 30, 40),
@@ -54,7 +58,7 @@ local Theme = {
 }
 VexUI.Theme = Theme
 
---  UTILITIES 
+-- ============ UTILITIES ============
 local Connections = {}
 
 local function Connect(signal, fn)
@@ -229,7 +233,7 @@ local function TrackDrag(hit, column, onMove)
     end)
 end
 
---  LUCIDE ICONS 
+-- ============ LUCIDE ICONS ============
 local IconModule
 do
     local ok, mod = pcall(function()
@@ -328,7 +332,7 @@ local function TintIcon(ic, color, time)
     Tween(ic.Instance, time or 0.15, { [ic.Prop] = color })
 end
 
---  OPTION-REGISTRY 
+-- ============ OPTION REGISTRY ============
 local function NewOption(kind, id, value)
     local obj = { Type = kind, Id = id, Value = value, _changed = {} }
 
@@ -349,7 +353,7 @@ local function NewOption(kind, id, value)
     return obj, changed
 end
 
---  GUI-CONTAINER 
+-- ============ GUI CONTAINER ============
 local function GetGuiParent()
     local ok, hui = pcall(function()
         return gethui and gethui()
@@ -374,7 +378,7 @@ local function EnsureGui()
     return VexUI.Gui
 end
 
---  NOTIFICATIONS 
+-- ============ NOTIFICATIONS ============
 local NotifContainer
 
 local function EnsureNotifContainer()
@@ -434,7 +438,6 @@ function VexUI:Notify(opts)
     Corner(notif, 8)
     Stroke(notif, Theme.Border, 1)
 
-    -- FIXED: Roter Balken - freistehender Pill, vertikal zentriert, 12px oben/unten Abstand
     local accent = Create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
@@ -484,7 +487,251 @@ function VexUI:Notify(opts)
     end)
 end
 
---  KONFIG SPEICHERN / LADEN 
+-- ============ CHANGELOG SYSTEM ============
+function VexUI:ShowChangelog(opts)
+    opts = opts or {}
+    local scriptName = opts.Title or "Script"
+    local version = opts.Version or "1.0.0"
+    local entries = opts.Entries or {}
+    local discord = opts.Discord
+
+    if VexUI._ChangelogGui and VexUI._ChangelogGui.Parent then
+        VexUI._ChangelogGui:Destroy()
+    end
+    VexUI._ChangelogGui = Create("ScreenGui", {
+        Name = "VexUI_Changelog",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 999,
+        Parent = GetGuiParent(),
+    })
+    local gui = VexUI._ChangelogGui
+
+    local overlay = Create("Frame", {
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Parent = gui,
+    })
+
+    local card = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.55),
+        Size = UDim2.fromOffset(520, 480),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Parent = overlay,
+    })
+    Corner(card, 14)
+    Stroke(card, Theme.Border, 1)
+
+    local topBar = Create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 3),
+        Parent = card,
+    })
+    Corner(topBar, 3)
+    Gradient(topBar, {
+        { 0, Theme.AccentDark },
+        { 0.5, Theme.Accent },
+        { 1, Theme.AccentDark },
+    }, 0)
+
+    local header = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 70),
+        Parent = card,
+    })
+    local logoBox = Create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(24, 20),
+        Size = UDim2.fromOffset(34, 34),
+        Parent = header,
+    })
+    Corner(logoBox, 10)
+    Gradient(logoBox, {
+        { 0, Theme.Accent },
+        { 1, Theme.AccentDark },
+    }, 45)
+    local logoIco = NewIcon(logoBox, "sparkles", 18, Color3.new(1, 1, 1), "*")
+    logoIco.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    logoIco.Instance.Position = UDim2.fromScale(0.5, 0.5)
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(70, 22),
+        Size = UDim2.new(1, -90, 0, 20),
+        Font = Theme.FontBold,
+        Text = scriptName,
+        TextColor3 = Theme.Text,
+        TextSize = 17,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = header,
+    })
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(70, 42),
+        Size = UDim2.new(1, -90, 0, 14),
+        Font = Theme.Font,
+        Text = "Version " .. version,
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = header,
+    })
+
+    local closeBtn = Create("TextButton", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -44, 0, 22),
+        Size = UDim2.fromOffset(24, 24),
+        Text = "X",
+        Font = Theme.FontBold,
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        AutoButtonColor = false,
+        Parent = header,
+    })
+    Corner(closeBtn, 6)
+    closeBtn.MouseEnter:Connect(function()
+        Tween(closeBtn, 0.15, { BackgroundColor3 = Theme.Accent, TextColor3 = Color3.new(1, 1, 1) })
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        Tween(closeBtn, 0.15, { BackgroundColor3 = Theme.Tertiary, TextColor3 = Theme.SubText })
+    end)
+
+    local scroll = Create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(16, 84),
+        Size = UDim2.new(1, -32, 1, -160),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Border,
+        ScrollBarImageTransparency = 0.3,
+        BorderSizePixel = 0,
+        Parent = card,
+    })
+    Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = scroll,
+    })
+
+    local typeColors = {
+        Added = Theme.Success,
+        Fixed = Color3.fromRGB(90, 170, 240),
+        Removed = Color3.fromRGB(240, 100, 100),
+        Changed = Theme.Warning,
+        Improved = Color3.fromRGB(180, 120, 240),
+    }
+
+    for i, entry in ipairs(entries) do
+        local eType, eText
+        if entry.Type and entry.Text then
+            eType = entry.Type
+            eText = entry.Text
+        else
+            for k, v in pairs(entry) do
+                eType = k
+                eText = v
+                break
+            end
+        end
+
+        local color = typeColors[eType] or Theme.Accent
+
+        local row = Create("Frame", {
+            BackgroundColor3 = Theme.Tertiary,
+            BackgroundTransparency = 0.4,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -6, 0, 32),
+            LayoutOrder = i,
+            Parent = scroll,
+        })
+        Corner(row, 8)
+
+        local pill = Create("Frame", {
+            BackgroundColor3 = color,
+            BackgroundTransparency = 0.85,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(8, 6),
+            Size = UDim2.fromOffset(70, 20),
+            Parent = row,
+        })
+        Corner(pill, 6)
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Font = Theme.FontBold,
+            Text = eType,
+            TextColor3 = color,
+            TextSize = 10,
+            Parent = pill,
+        })
+
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(86, 0),
+            Size = UDim2.new(1, -96, 1, 0),
+            Font = Theme.Font,
+            Text = tostring(eText),
+            TextColor3 = Theme.Text,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextWrapped = true,
+            Parent = row,
+        })
+    end
+
+    local footer = Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 1, -64),
+        Size = UDim2.new(1, 0, 0, 52),
+        Parent = card,
+    })
+
+    local okBtn = Create("TextButton", {
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 6),
+        Size = UDim2.new(1, -60, 0, 34),
+        Font = Theme.FontBold,
+        Text = "Continue",
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 13,
+        AutoButtonColor = false,
+        Parent = footer,
+    })
+    Corner(okBtn, 10)
+    Gradient(okBtn, {
+        { 0, Theme.Accent },
+        { 1, Theme.AccentDark },
+    }, 45)
+
+    Tween(card, 0.35, {
+        BackgroundTransparency = 0.04,
+        Position = UDim2.fromScale(0.5, 0.5),
+    }, Enum.EasingStyle.Back)
+
+    local function close()
+        Tween(card, 0.25, {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.55),
+        })
+        task.wait(0.3)
+        gui:Destroy()
+    end
+
+    closeBtn.MouseButton1Click:Connect(close)
+    okBtn.MouseButton1Click:Connect(close)
+end
+
+-- ============ CONFIG ============
 local ConfigFolder = "VexUI/configs"
 
 local function HasFS()
@@ -581,7 +828,7 @@ function VexUI:ListConfigs()
     return out
 end
 
---  UNLOAD 
+-- ============ UNLOAD ============
 function VexUI:Unload()
     self.Unloaded = true
     for _, c in ipairs(Connections) do
@@ -596,6 +843,9 @@ function VexUI:Unload()
     if self.NotifGui then
         self.NotifGui:Destroy()
     end
+    if self._ChangelogGui then
+        self._ChangelogGui:Destroy()
+    end
     table.clear(self.Toggles)
     table.clear(self.Options)
     if GENV.VexUI_Instance == self then
@@ -603,7 +853,7 @@ function VexUI:Unload()
     end
 end
 
---  KARTEN-HELFER 
+-- ============ CARD HELPERS ============
 local AvatarCache
 
 local function LoadAvatar(img)
@@ -792,7 +1042,7 @@ local function GetExecutorName()
     return (ok and name) or "Unknown executor"
 end
 
---  WINDOW 
+-- ============ WINDOW ============
 function VexUI:CreateWindow(opts)
     opts = opts or {}
     local title = opts.Title or "VexUI"
@@ -1225,7 +1475,7 @@ function Window:SelectTab(tab)
     tab:_SetActive(true)
 end
 
---  HOME-DASHBOARD 
+-- ============ HOME TAB ============
 function Window:AddHomeTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Home", opts.Icon or "house")
@@ -1519,7 +1769,280 @@ function Window:AddHomeTab(opts)
     return tab
 end
 
---  SETTINGS-TAB 
+-- ============ INFO TAB ============
+function Window:AddInfoTab(opts)
+    opts = opts or {}
+    local tab = self:AddTab(opts.Name or "Info", opts.Icon or "info")
+    tab.Left:Destroy()
+    tab.Right:Destroy()
+    local page = tab.Frame
+
+    local hero = Card(page, UDim2.new(1, 0, 0, 100), Theme.Card)
+    Gradient(hero, {
+        { 0, Theme.Card },
+        { 0.5, Color3.fromRGB(14, 14, 20) },
+        { 1, Theme.Card },
+    }, 135)
+    Glow(hero, Theme.Accent, -45, 0.3)
+
+    local heroIcon = Create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(20, 20),
+        Size = UDim2.fromOffset(60, 60),
+        Parent = hero,
+    })
+    Corner(heroIcon, 14)
+    Gradient(heroIcon, {
+        { 0, Theme.Accent },
+        { 1, Theme.AccentDark },
+    }, 45)
+    local hi = NewIcon(heroIcon, opts.Icon or "shield-check", 30, Color3.new(1, 1, 1), "R")
+    hi.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    hi.Instance.Position = UDim2.fromScale(0.5, 0.5)
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(96, 24),
+        Size = UDim2.new(1, -110, 0, 24),
+        Font = Theme.FontBold,
+        Text = opts.Title or "Ravine",
+        TextColor3 = Theme.Text,
+        TextSize = 20,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = hero,
+    })
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(96, 52),
+        Size = UDim2.new(1, -110, 0, 16),
+        Font = Theme.Font,
+        Text = opts.Subtitle or "Advanced Utility Suite",
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = hero,
+    })
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(96, 72),
+        Size = UDim2.new(1, -110, 0, 14),
+        Font = Theme.Font,
+        Text = "v" .. (opts.Version or "1.0.0"),
+        TextColor3 = Theme.Accent,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = hero,
+    })
+
+    local cols = Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(0, 112),
+        Size = UDim2.new(1, 0, 1, -112),
+        Parent = page,
+    })
+    local function Col(pos)
+        local c = Create("Frame", {
+            BackgroundTransparency = 1,
+            Position = pos,
+            Size = UDim2.new(0.5, -5, 1, 0),
+            Parent = cols,
+        })
+        Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8), Parent = c })
+        return c
+    end
+    local left = Col(UDim2.new(0, 0, 0, 0))
+    local right = Col(UDim2.new(0.5, 5, 0, 0))
+
+    local serverCard = Card(left, UDim2.new(1, 0, 0, 240), Theme.Card)
+    serverCard.LayoutOrder = 1
+    Glow(serverCard, Theme.Success, -45, 0.25)
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(14, 12),
+        Size = UDim2.new(1, -28, 0, 18),
+        Font = Theme.FontBold,
+        Text = "Server Information",
+        TextColor3 = Theme.Text,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = serverCard,
+    })
+
+    local function infoRow(parent, order, label, value)
+        local r = Create("Frame", {
+            BackgroundColor3 = Theme.Tertiary,
+            BackgroundTransparency = 0.4,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -24, 0, 32),
+            Position = UDim2.fromOffset(12, 36 + (order - 1) * 36),
+            Parent = parent,
+        })
+        Corner(r, 6)
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(10, 0),
+            Size = UDim2.new(0.5, 0, 1, 0),
+            Font = Theme.Font,
+            Text = label,
+            TextColor3 = Theme.SubText,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = r,
+        })
+        local vl = Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0.5, 0, 0, 0),
+            Size = UDim2.new(0.5, -10, 1, 0),
+            Font = Theme.FontBold,
+            Text = tostring(value),
+            TextColor3 = Theme.Text,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Right,
+            Parent = r,
+        })
+        return vl
+    end
+
+    infoRow(serverCard, 1, "Job ID", game.JobId:sub(1, 8) .. "...")
+    infoRow(serverCard, 2, "Place ID", tostring(game.PlaceId))
+    local pingLbl = infoRow(serverCard, 3, "Ping", "-")
+    local playersLbl = infoRow(serverCard, 4, "Players", "-")
+    infoRow(serverCard, 5, "Max Players", tostring(game.Players.MaxPlayers))
+
+    local execCard = Card(right, UDim2.new(1, 0, 0, 130), Theme.Card)
+    execCard.LayoutOrder = 1
+    Glow(execCard, Theme.Warning, -135, 0.2)
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(14, 12),
+        Size = UDim2.new(1, -28, 0, 18),
+        Font = Theme.FontBold,
+        Text = "Executor",
+        TextColor3 = Theme.Text,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = execCard,
+    })
+
+    local execName = GetExecutorName()
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(14, 38),
+        Size = UDim2.new(1, -28, 0, 20),
+        Font = Theme.FontBold,
+        Text = execName,
+        TextColor3 = Theme.Accent,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = execCard,
+    })
+
+    local okCount = 0
+    local total = 4
+    local checks = {
+        loadstring ~= nil,
+        getgc ~= nil,
+        hookfunction ~= nil,
+        (setclipboard ~= nil or toclipboard ~= nil),
+    }
+    for _, c in ipairs(checks) do
+        if c then okCount = okCount + 1 end
+    end
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(14, 62),
+        Size = UDim2.new(1, -28, 0, 14),
+        Font = Theme.Font,
+        Text = "Compat: " .. okCount .. "/" .. total .. " functions",
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = execCard,
+    })
+
+    local barBg = Create("Frame", {
+        BackgroundColor3 = Theme.ToggleOff,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(14, 84),
+        Size = UDim2.new(1, -28, 0, 6),
+        Parent = execCard,
+    })
+    Corner(barBg, 3)
+    local barFill = Create("Frame", {
+        BackgroundColor3 = okCount >= 3 and Theme.Success or Theme.Warning,
+        BorderSizePixel = 0,
+        Size = UDim2.new(okCount / total, 0, 1, 0),
+        Parent = barBg,
+    })
+    Corner(barFill, 3)
+
+    if opts.Discord then
+        local dcCard = Card(right, UDim2.new(1, 0, 0, 80), Color3.new(1, 1, 1), "TextButton")
+        dcCard.LayoutOrder = 2
+        Gradient(dcCard, {
+            { 0, Color3.fromRGB(88, 101, 242) },
+            { 0.55, Color3.fromRGB(52, 32, 112) },
+            { 1, Color3.fromRGB(14, 12, 24) },
+        }, 8)
+
+        local dl = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = dcCard })
+        Create("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            Padding = UDim.new(0, 4),
+            Parent = dl,
+        })
+        Create("UIPadding", { PaddingLeft = UDim.new(0, 16), Parent = dl })
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -16, 0, 22),
+            LayoutOrder = 1,
+            Font = Theme.FontBold,
+            Text = "Join our Discord",
+            TextColor3 = Color3.new(1, 1, 1),
+            TextSize = 15,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = dl,
+        })
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -16, 0, 14),
+            LayoutOrder = 2,
+            Font = Theme.Font,
+            Text = opts.Discord,
+            TextColor3 = Color3.fromRGB(215, 218, 255),
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = dl,
+        })
+
+        dcCard.MouseButton1Click:Connect(function()
+            if setclipboard then setclipboard("https://" .. opts.Discord) end
+            VexUI:Notify({ Title = "Discord", Description = "Link copied!", Icon = "circle-check" })
+        end)
+    end
+
+    task.spawn(function()
+        while self.Alive and not VexUI.Unloaded do
+            pcall(function()
+                local ok, ping = pcall(function()
+                    return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                end)
+                pingLbl.Text = ok and (ping .. "ms") or "N/A"
+                playersLbl.Text = #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+            end)
+            task.wait(2)
+        end
+    end)
+
+    return tab
+end
+
+-- ============ SETTINGS TAB ============
 function Window:AddSettingsTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Settings", opts.Icon or "settings")
@@ -1591,7 +2114,7 @@ function Window:AddSettingsTab(opts)
     return tab
 end
 
---  TAB 
+-- ============ TAB METHODS ============
 function Tab:_SetActive(active)
     Tween(self._btn, 0.15, { BackgroundTransparency = active and 0 or 1 })
     Tween(self._stroke, 0.15, { Transparency = active and 0 or 1 })
@@ -1606,6 +2129,7 @@ function Tab:AddRightGroupbox(name, icon)
     return self:_AddGroupbox(name, icon, self.Right)
 end
 
+-- *** FIXED GROUPBOX: outer + inner frame with 1px padding = perfect border ***
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({
         Name = name,
@@ -1614,22 +2138,40 @@ function Tab:_AddGroupbox(name, icon, column)
         _n = 0,
     }, Groupbox)
 
-    local frame = Create("Frame", {
-        Name = name,
-        BackgroundColor3 = Theme.Secondary,
+    -- OUTER = border color
+    local outer = Create("Frame", {
+        Name = name .. "_Outer",
+        BackgroundColor3 = Theme.Border,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         LayoutOrder = #self.Groupboxes + 1,
         Parent = column,
     })
+    Corner(outer, 9)
+    Create("UIPadding", {
+        PaddingTop = UDim.new(0, 1),
+        PaddingBottom = UDim.new(0, 1),
+        PaddingLeft = UDim.new(0, 1),
+        PaddingRight = UDim.new(0, 1),
+        Parent = outer,
+    })
+
+    -- INNER = actual content
+    local frame = Create("Frame", {
+        Name = name,
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = outer,
+    })
     Corner(frame, 8)
-    Stroke(frame, Theme.Border, 1)
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
 
     local titleFrame = Create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, 0, 0, 34),
         LayoutOrder = 1,
         Parent = frame,
     })
@@ -1680,13 +2222,14 @@ function Tab:_AddGroupbox(name, icon, column)
     })
 
     box.Frame = frame
+    box.Outer = outer
     box.Container = container
     box.Scroll = container
     table.insert(self.Groupboxes, box)
     return box
 end
 
---  GROUPBOX 
+-- ============ GROUPBOX ELEMENTS ============
 local function Add(self, className, props)
     self._n = self._n + 1
     props.LayoutOrder = self._n
@@ -2330,5 +2873,5 @@ function Groupbox:AddKeyPicker(id, opts)
     return obj
 end
 
---  INIT 
+-- ============ INIT ============
 return VexUI
