@@ -499,64 +499,51 @@ function VexUI:ShowChangelog(opts)
         VexUI._ChangelogGui:Destroy()
     end
 
-    VexUI._ChangelogGui = Create("ScreenGui", {
+    local gui = Create("ScreenGui", {
         Name = "VexUI_Changelog",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 999,
-        IgnoreGuiInset = true,
         Parent = GetGuiParent(),
     })
-    local gui = VexUI._ChangelogGui
+    VexUI._ChangelogGui = gui
 
-    local cardW, cardH = 640, 560
+    local size = UDim2.fromOffset(520, 470)
 
-    -- Holder (draggable container)
-    local holder = Create("Frame", {
-        Name = "Holder",
+    -- ============ WINDOW (gleich wie Main) ============
+    local main = Create("Frame", {
+        Name = "Main",
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.58),
-        Size = UDim2.fromOffset(cardW, cardH),
-        BackgroundTransparency = 1,
-        ZIndex = 1,
-        Parent = gui,
-    })
-    local uiScale = Create("UIScale", { Parent = holder })
-
-    -- Shadow
-    local shadow = Create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 12),
-        Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.55,
-        BorderSizePixel = 0,
-        ZIndex = 1,
-        Parent = holder,
-    })
-    Corner(shadow, 14)
-
-    -- Card (main window style)
-    local card = Create("Frame", {
-        Name = "Card",
-        Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = size,
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.02,
+        BackgroundTransparency = 0.04,
         BorderSizePixel = 0,
         ClipsDescendants = true,
-        ZIndex = 2,
-        Parent = holder,
+        Parent = gui,
     })
-    Corner(card, 12)
-    Stroke(card, Theme.Border, 1)
+    Corner(main, 12)
+    Stroke(main, Theme.Border, 1)
+    local uiScale = Create("UIScale", { Parent = main })
 
-    -- ============ TOPBAR (identical to Main window) ============
+    local function fitScale()
+        local cam = workspace.CurrentCamera
+        if not cam then
+            return 1
+        end
+        local vp = cam.ViewportSize
+        local fit = math.min((vp.X - 24) / size.X.Offset, (vp.Y - 24) / size.Y.Offset)
+        return math.clamp(math.min(1, fit), 0.5, 2)
+    end
+    local targetScale = fitScale()
+    uiScale.Scale = targetScale * 0.94
+
+    -- ============ TOPBAR (gleich wie Main) ============
     local topBar = Create("Frame", {
         Name = "TopBar",
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 46),
-        ZIndex = 3,
-        Parent = card,
+        Parent = main,
     })
     Create("Frame", {
         BackgroundColor3 = Theme.Border,
@@ -566,13 +553,13 @@ function VexUI:ShowChangelog(opts)
         Parent = topBar,
     })
 
-    local logo = NewIcon(topBar, "sparkles", 22, Theme.Accent, "✦")
+    local logo = NewIcon(topBar, opts.Icon or "scroll-text", 22, Theme.Accent, "•")
     logo.Instance.Position = UDim2.new(0, 16, 0.5, -11)
 
     local titleHolder = Create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 48, 0, 0),
-        Size = UDim2.new(1, -170, 1, 0),
+        Size = UDim2.new(1, -100, 1, 0),
         Parent = topBar,
     })
     Create("UIListLayout", {
@@ -599,13 +586,12 @@ function VexUI:ShowChangelog(opts)
         Size = UDim2.new(0, 0, 0, 20),
         LayoutOrder = 2,
         Font = Theme.Font,
-        Text = "Changelog • v" .. version,
+        Text = "Changelog  v" .. version,
         TextColor3 = Theme.SubText,
         TextSize = 12,
         Parent = titleHolder,
     })
 
-    -- Close button (identical to Main top button)
     local closeBtn = Create("TextButton", {
         BackgroundColor3 = Theme.Tertiary,
         BorderSizePixel = 0,
@@ -614,92 +600,34 @@ function VexUI:ShowChangelog(opts)
         Size = UDim2.fromOffset(28, 28),
         Text = "",
         AutoButtonColor = false,
-        ZIndex = 4,
         Parent = topBar,
     })
     Corner(closeBtn, 8)
     local closeStrk = Stroke(closeBtn, Theme.Border, 1)
-    local closeIco = NewIcon(closeBtn, "x", 14, Theme.SubText, "✕")
+    local closeIco = NewIcon(closeBtn, "x", 14, Theme.SubText, "x")
     closeIco.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
     closeIco.Instance.Position = UDim2.fromScale(0.5, 0.5)
     closeBtn.MouseEnter:Connect(function()
-        Tween(closeBtn, 0.15, { BackgroundColor3 = Theme.Accent })
+        TintIcon(closeIco, Theme.Text)
         Tween(closeStrk, 0.15, { Color = Theme.Accent })
-        TintIcon(closeIco, Color3.new(1, 1, 1))
     end)
     closeBtn.MouseLeave:Connect(function()
-        Tween(closeBtn, 0.15, { BackgroundColor3 = Theme.Tertiary })
-        Tween(closeStrk, 0.15, { Color = Theme.Border })
         TintIcon(closeIco, Theme.SubText)
+        Tween(closeStrk, 0.15, { Color = Theme.Border })
     end)
 
-    -- ============ HERO STRIP (like executor card) ============
-    local hero = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(16, 9, 11),
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 46),
-        Size = UDim2.new(1, 0, 0, 68),
-        ZIndex = 3,
-        Parent = card,
-    })
-    Gradient(hero, {
-        { 0,   Color3.fromRGB(150, 38, 46) },
-        { 0.6, Color3.fromRGB(58, 18, 22) },
-        { 1,   Color3.fromRGB(16, 9, 11) },
-    }, 20)
-
-    -- Big sparkle icon
-    local heroIcon = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 0.6,
-        BorderSizePixel = 0,
-        Position = UDim2.fromOffset(20, 14),
-        Size = UDim2.fromOffset(40, 40),
-        ZIndex = 5,
-        Parent = hero,
-    })
-    Corner(heroIcon, 12)
-    local hi = NewIcon(heroIcon, "sparkles", 22, Color3.fromRGB(255, 220, 225), "✦")
-    hi.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
-    hi.Instance.Position = UDim2.fromScale(0.5, 0.5)
-
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(74, 14),
-        Size = UDim2.new(1, -90, 0, 20),
-        Font = Theme.FontBold,
-        Text = "What's new",
-        TextColor3 = Color3.new(1, 1, 1),
-        TextSize = 16,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 5,
-        Parent = hero,
-    })
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(74, 34),
-        Size = UDim2.new(1, -90, 0, 16),
-        Font = Theme.Font,
-        Text = #entries .. " change" .. (#entries == 1 and "" or "s") .. " in this update",
-        TextColor3 = Color3.fromRGB(240, 200, 205),
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 5,
-        Parent = hero,
-    })
-
-    -- ============ TYPE DATA ============
-    local typeData = {
-        Added    = { Color = Color3.fromRGB(70, 210, 130),  Icon = "plus",       Fallback = "+" },
-        Fixed    = { Color = Color3.fromRGB(90, 170, 245),  Icon = "wrench",     Fallback = "⚙" },
-        Removed  = { Color = Color3.fromRGB(245, 95, 95),   Icon = "trash-2",    Fallback = "✕" },
-        Changed  = { Color = Color3.fromRGB(245, 195, 70),  Icon = "refresh-cw", Fallback = "↻" },
-        Improved = { Color = Color3.fromRGB(185, 130, 245), Icon = "sparkles",   Fallback = "✦" },
+    -- ============ DATEN ============
+    local typeIcons = {
+        Added = "plus",
+        Improved = "sparkles",
+        Changed = "refresh-cw",
+        Fixed = "wrench",
+        Removed = "trash-2",
     }
+    local typeOrder = { "Added", "Improved", "Changed", "Fixed", "Removed" }
 
-    local counts = {}
-    local parsed = {}
-    for i, entry in ipairs(entries) do
+    local groups, extra = {}, {}
+    for _, entry in ipairs(entries) do
         local eType, eText
         if entry.Type and entry.Text then
             eType, eText = entry.Type, entry.Text
@@ -709,182 +637,102 @@ function VexUI:ShowChangelog(opts)
                 break
             end
         end
-        counts[eType] = (counts[eType] or 0) + 1
-        parsed[i] = { Type = eType, Text = eText }
-    end
-
-    -- ============ STATS BAR ============
-    local statsBar = Create("Frame", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 126),
-        Size = UDim2.new(1, -40, 0, 26),
-        ZIndex = 4,
-        Parent = card,
-    })
-    Create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6),
-        Parent = statsBar,
-    })
-
-    local statOrder = { "Added", "Fixed", "Changed", "Improved", "Removed" }
-    local statIdx = 0
-    for _, t in ipairs(statOrder) do
-        local n = counts[t]
-        if n and n > 0 then
-            statIdx = statIdx + 1
-            local data = typeData[t]
-            local chip = Create("Frame", {
-                BackgroundColor3 = data.Color,
-                BackgroundTransparency = 0.85,
-                BorderSizePixel = 0,
-                Size = UDim2.fromOffset(0, 24),
-                AutomaticSize = Enum.AutomaticSize.X,
-                LayoutOrder = statIdx,
-                ZIndex = 4,
-                Parent = statsBar,
-            })
-            Corner(chip, 12)
-            Stroke(chip, data.Color, 1)
-            Create("UIPadding", {
-                PaddingLeft = UDim.new(0, 10),
-                PaddingRight = UDim.new(0, 12),
-                Parent = chip,
-            })
-            Create("TextLabel", {
-                BackgroundTransparency = 1,
-                AutomaticSize = Enum.AutomaticSize.X,
-                Size = UDim2.new(0, 0, 1, 0),
-                Font = Theme.FontBold,
-                Text = n .. "  " .. t,
-                TextColor3 = data.Color,
-                TextSize = 11,
-                Parent = chip,
-            })
+        eType = tostring(eType or "Changed")
+        if not groups[eType] then
+            groups[eType] = {}
+            if not typeIcons[eType] then
+                table.insert(extra, eType)
+            end
         end
+        table.insert(groups[eType], tostring(eText))
     end
 
-    -- ============ SCROLL AREA ============
-    local footerH = 66
+    -- ============ SCROLL ============
     local scroll = Create("ScrollingFrame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 164),
-        Size = UDim2.new(1, -40, 1, -164 - footerH),
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 10, 0, 56),
+        Size = UDim2.new(1, -20, 1, -120),
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollBarThickness = 3,
+        ScrollBarThickness = 2,
         ScrollBarImageColor3 = Theme.Border,
-        ScrollBarImageTransparency = 0.3,
-        BorderSizePixel = 0,
-        ZIndex = 4,
-        Parent = card,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Parent = main,
     })
     Create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 8),
         Parent = scroll,
     })
-    Create("UIPadding", { PaddingRight = UDim.new(0, 8), Parent = scroll })
+    Create("UIPadding", { PaddingRight = UDim.new(0, 4), Parent = scroll })
 
-    -- ============ ROWS ============
-    for i, entry in ipairs(parsed) do
-        local data = typeData[entry.Type] or { Color = Theme.Accent, Icon = "info", Fallback = "•" }
-        local color = data.Color
+    -- Fake-Tab, damit die echten Groupboxen der Main UI benutzt werden
+    local fakeTab = { Groupboxes = {} }
 
-        local row = Create("Frame", {
-            BackgroundColor3 = Theme.Tertiary,
-            BackgroundTransparency = 0.2,
-            BorderSizePixel = 0,
-            Size = UDim2.new(1, -6, 0, 56),
-            LayoutOrder = i,
-            Parent = scroll,
-        })
-        Corner(row, 10)
-        local rowStrk = Stroke(row, Theme.Border, 1)
+    local function buildGroup(typeName)
+        local list = groups[typeName]
+        if not list then
+            return
+        end
+        local box = Tab._AddGroupbox(fakeTab, typeName, typeIcons[typeName] or "info", scroll)
+        for _, text in ipairs(list) do
+            local row = Add(box, "Frame", {
+                BackgroundColor3 = Theme.Tertiary,
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
+            })
+            Corner(row, 6)
+            Stroke(row, Theme.Border, 1)
+            Create("UIPadding", {
+                PaddingTop = UDim.new(0, 9),
+                PaddingBottom = UDim.new(0, 9),
+                PaddingLeft = UDim.new(0, 12),
+                PaddingRight = UDim.new(0, 12),
+                Parent = row,
+            })
+            Create("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 10),
+                Parent = row,
+            })
 
-        -- Icon badge
-        local badge = Create("Frame", {
-            BackgroundColor3 = color,
-            BackgroundTransparency = 0.82,
-            BorderSizePixel = 0,
-            Position = UDim2.fromOffset(12, 12),
-            Size = UDim2.fromOffset(32, 32),
-            ZIndex = 5,
-            Parent = row,
-        })
-        Corner(badge, 10)
-        Stroke(badge, color, 1)
-        badge:FindFirstChildOfClass("UIStroke").Transparency = 0.6
-        local bic = NewIcon(badge, data.Icon, 16, color, data.Fallback)
-        bic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
-        bic.Instance.Position = UDim2.fromScale(0.5, 0.5)
+            local ic = NewIcon(row, typeIcons[typeName] or "info", 14, Theme.Accent, "•")
+            ic.Instance.LayoutOrder = 1
 
-        -- Type pill
-        local pill = Create("Frame", {
-            BackgroundColor3 = color,
-            BackgroundTransparency = 0.88,
-            BorderSizePixel = 0,
-            Position = UDim2.fromOffset(56, 10),
-            Size = UDim2.fromOffset(0, 16),
-            AutomaticSize = Enum.AutomaticSize.X,
-            ZIndex = 5,
-            Parent = row,
-        })
-        Corner(pill, 8)
-        Create("UIPadding", {
-            PaddingLeft = UDim.new(0, 8),
-            PaddingRight = UDim.new(0, 8),
-            Parent = pill,
-        })
-        Create("TextLabel", {
-            BackgroundTransparency = 1,
-            AutomaticSize = Enum.AutomaticSize.X,
-            Size = UDim2.new(0, 0, 1, 0),
-            Font = Theme.FontBold,
-            Text = string.upper(entry.Type or "INFO"),
-            TextColor3 = color,
-            TextSize = 10,
-            Parent = pill,
-        })
+            Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -24, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
+                LayoutOrder = 2,
+                Font = Theme.Font,
+                Text = text,
+                TextColor3 = Theme.Text,
+                TextSize = 13,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                Parent = row,
+            })
+        end
+    end
 
-        -- Description text
-        Create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(56, 28),
-            Size = UDim2.new(1, -72, 0, 20),
-            Font = Theme.Font,
-            Text = tostring(entry.Text),
-            TextColor3 = Theme.Text,
-            TextSize = 13,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextYAlignment = Enum.TextYAlignment.Center,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            ZIndex = 5,
-            Parent = row,
-        })
-
-        -- Hover
-        row.MouseEnter:Connect(function()
-            Tween(row, 0.15, { BackgroundTransparency = 0.05, BackgroundColor3 = Theme.Secondary })
-            Tween(rowStrk, 0.15, { Color = color })
-            Tween(badge, 0.15, { BackgroundTransparency = 0.55 })
-        end)
-        row.MouseLeave:Connect(function()
-            Tween(row, 0.15, { BackgroundTransparency = 0.2, BackgroundColor3 = Theme.Tertiary })
-            Tween(rowStrk, 0.15, { Color = Theme.Border })
-            Tween(badge, 0.15, { BackgroundTransparency = 0.82 })
-        end)
+    for _, t in ipairs(typeOrder) do
+        buildGroup(t)
+    end
+    for _, t in ipairs(extra) do
+        buildGroup(t)
     end
 
     -- ============ FOOTER ============
     local footer = Create("Frame", {
-        BackgroundColor3 = Theme.Secondary,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 1, -footerH),
-        Size = UDim2.new(1, 0, 0, footerH),
-        ZIndex = 5,
-        Parent = card,
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 0, 1, 0),
+        Size = UDim2.new(1, 0, 0, 54),
+        Parent = main,
     })
     Create("Frame", {
         BackgroundColor3 = Theme.Border,
@@ -893,28 +741,28 @@ function VexUI:ShowChangelog(opts)
         Parent = footer,
     })
 
-    local dcRow = Create("Frame", {
+    local infoHolder = Create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(22, 0),
-        Size = UDim2.new(1, -200, 1, 0),
+        Position = UDim2.fromOffset(16, 0),
+        Size = UDim2.new(1, -150, 1, 0),
         Parent = footer,
     })
     Create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
         VerticalAlignment = Enum.VerticalAlignment.Center,
-        Padding = UDim.new(0, 2),
-        Parent = dcRow,
+        Padding = UDim.new(0, 1),
+        Parent = infoHolder,
     })
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 16),
         LayoutOrder = 1,
         Font = Theme.FontBold,
-        Text = scriptName .. " • v" .. version,
+        Text = scriptName .. "  v" .. version,
         TextColor3 = Theme.Text,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = dcRow,
+        Parent = infoHolder,
     })
     if discord then
         Create("TextLabel", {
@@ -926,69 +774,56 @@ function VexUI:ShowChangelog(opts)
             TextColor3 = Theme.SubText,
             TextSize = 11,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = dcRow,
+            Parent = infoHolder,
         })
     end
 
-    -- Continue button (big, matches main UI style)
+    -- Button im gleichen Stil wie Groupbox:AddButton
     local okBtn = Create("TextButton", {
-        BackgroundColor3 = Theme.Accent,
+        BackgroundColor3 = Theme.Tertiary,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -20, 0.5, 0),
-        Size = UDim2.fromOffset(160, 42),
-        Font = Theme.FontBold,
-        Text = "",
+        Position = UDim2.new(1, -12, 0.5, 0),
+        Size = UDim2.fromOffset(112, 34),
+        Font = Theme.Font,
+        Text = "Continue",
+        TextColor3 = Theme.Text,
+        TextSize = 13,
         AutoButtonColor = false,
         Parent = footer,
     })
-    Corner(okBtn, 10)
-    Gradient(okBtn, {
-        { 0, Theme.Accent },
-        { 1, Theme.AccentDark },
-    }, 45)
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(20, 0),
-        Size = UDim2.new(1, -50, 1, 0),
-        Font = Theme.FontBold,
-        Text = "Continue",
-        TextColor3 = Color3.new(1, 1, 1),
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 6,
-        Parent = okBtn,
-    })
-    local okIco = NewIcon(okBtn, "arrow-right", 16, Color3.new(1, 1, 1), "→")
+    Corner(okBtn, 6)
+    local okStrk = Stroke(okBtn, Theme.Border, 1)
+    okBtn.TextXAlignment = Enum.TextXAlignment.Left
+    Create("UIPadding", { PaddingLeft = UDim.new(0, 14), Parent = okBtn })
+    local okIco = NewIcon(okBtn, "arrow-right", 14, Theme.Text, ">")
     okIco.Instance.AnchorPoint = Vector2.new(1, 0.5)
-    okIco.Instance.Position = UDim2.new(1, -18, 0.5, 0)
+    okIco.Instance.Position = UDim2.new(1, -10, 0.5, 0)
 
-    local btnScale = Create("UIScale", { Parent = okBtn })
     okBtn.MouseEnter:Connect(function()
-        Tween(btnScale, 0.15, { Scale = 1.04 })
+        Tween(okBtn, 0.15, { BackgroundColor3 = Theme.Accent })
+        Tween(okStrk, 0.15, { Color = Theme.Accent })
     end)
     okBtn.MouseLeave:Connect(function()
-        Tween(btnScale, 0.15, { Scale = 1 })
+        Tween(okBtn, 0.15, { BackgroundColor3 = Theme.Tertiary })
+        Tween(okStrk, 0.15, { Color = Theme.Border })
     end)
 
-    -- ============ ENTRANCE ============
-    Tween(holder, 0.4, {
-        Position = UDim2.fromScale(0.5, 0.5),
-    }, Enum.EasingStyle.Back)
+    -- ============ ENTRANCE / DRAG / CLOSE ============
+    Tween(uiScale, 0.2, { Scale = targetScale })
 
-    -- ============ DRAG ============
-    local dragState = MakeDraggable(holder, topBar, function()
+    local dragState = MakeDraggable(main, topBar, function()
         return uiScale.Scale
     end)
 
-    -- ============ CLOSE ============
+    local closing = false
     local function close()
-        Tween(holder, 0.25, {
-            Position = UDim2.fromScale(0.5, 0.58),
-        })
-        Tween(card, 0.25, { BackgroundTransparency = 1 })
-        Tween(shadow, 0.25, { BackgroundTransparency = 1 })
-        task.wait(0.3)
+        if closing then
+            return
+        end
+        closing = true
+        Tween(uiScale, 0.15, { Scale = targetScale * 0.94 })
+        task.wait(0.15)
         gui:Destroy()
     end
 
