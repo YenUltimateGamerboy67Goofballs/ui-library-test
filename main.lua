@@ -509,178 +509,287 @@ function VexUI:ShowChangelog(opts)
     })
     local gui = VexUI._ChangelogGui
 
-    -- Transparent fullscreen container (no dark overlay)
     local container = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.fromScale(1, 1),
         Parent = gui,
     })
 
-    local cardW, cardH = 560, 540
+    local cardW, cardH = 620, 600
 
-    -- Soft drop shadow (no dark overlay, just shadow behind card)
     local shadow = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.6, 6),
-        Size = UDim2.fromOffset(cardW - 8, cardH - 8),
+        Position = UDim2.new(0.5, 0, 0.6, 10),
+        Size = UDim2.fromOffset(cardW, cardH),
         BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.65,
+        BackgroundTransparency = 0.55,
         BorderSizePixel = 0,
         ZIndex = 0,
         Parent = container,
     })
-    Corner(shadow, 16)
+    Corner(shadow, 22)
 
-    -- Card
     local card = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.6),
         Size = UDim2.fromOffset(cardW, cardH),
-        BackgroundColor3 = Theme.Background,
+        BackgroundColor3 = Color3.fromRGB(14, 14, 18),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 1,
         Parent = container,
     })
-    Corner(card, 14)
-    Stroke(card, Theme.Border, 1)
+    Corner(card, 18)
+    Stroke(card, Color3.fromRGB(50, 50, 62), 1)
 
-    -- Accent top bar
-    local topBar = Create("Frame", {
-        BackgroundColor3 = Theme.Accent,
+    -- HERO HEADER (gradient)
+    local hero = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(28, 10, 14),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 3),
+        Size = UDim2.new(1, 0, 0, 130),
         ZIndex = 2,
         Parent = card,
     })
-    Gradient(topBar, {
+    Gradient(hero, {
+        { 0,   Color3.fromRGB(60, 12, 20) },
+        { 0.4, Color3.fromRGB(38, 10, 16) },
+        { 1,   Color3.fromRGB(14, 8, 12) },
+    }, 15)
+
+    local glow = Create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.82,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(-50, -60),
+        Size = UDim2.fromOffset(260, 260),
+        ZIndex = 2,
+        Parent = hero,
+    })
+    Corner(glow, 130)
+    Create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Rotation = 45,
+        Parent = glow,
+    })
+
+    local sepLine = Create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 1, -2),
+        Size = UDim2.new(1, 0, 0, 2),
+        ZIndex = 3,
+        Parent = hero,
+    })
+    Gradient(sepLine, {
         { 0, Theme.AccentDark },
         { 0.5, Theme.Accent },
         { 1, Theme.AccentDark },
     }, 0)
 
-    -- ============ HEADER ============
-    local header = Create("Frame", {
-        BackgroundColor3 = Theme.Secondary,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 96),
-        ZIndex = 2,
-        Parent = card,
-    })
-    Create("Frame", {
-        BackgroundColor3 = Theme.Border,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 1, -1),
-        Size = UDim2.new(1, 0, 0, 1),
-        Parent = header,
-    })
-
-    -- Logo box
     local logoBox = Create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(24, 26),
-        Size = UDim2.fromOffset(44, 44),
-        Parent = header,
+        Position = UDim2.fromOffset(28, 34),
+        Size = UDim2.fromOffset(62, 62),
+        ZIndex = 4,
+        Parent = hero,
     })
-    Corner(logoBox, 12)
+    Corner(logoBox, 16)
     Gradient(logoBox, {
-        { 0, Theme.Accent },
+        { 0, Color3.fromRGB(230, 50, 60) },
         { 1, Theme.AccentDark },
     }, 45)
-    local logoIco = NewIcon(logoBox, "sparkles", 22, Color3.new(1, 1, 1), "*")
+    local logoScale = Create("UIScale", { Parent = logoBox })
+    logoScale.Scale = 0
+    Tween(logoScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
+
+    local logoIco = NewIcon(logoBox, "sparkles", 32, Color3.new(1, 1, 1), "✦")
     logoIco.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
     logoIco.Instance.Position = UDim2.fromScale(0.5, 0.5)
 
-    -- Script title
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(82, 26),
-        Size = UDim2.new(1, -180, 0, 22),
+        Position = UDim2.fromOffset(108, 40),
+        Size = UDim2.new(1, -180, 0, 26),
         Font = Theme.FontBold,
         Text = scriptName,
-        TextColor3 = Theme.Text,
-        TextSize = 19,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 24,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = header,
+        ZIndex = 4,
+        Parent = hero,
     })
 
-    -- Version pill
-    local verPill = Create("Frame", {
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.85,
-        BorderSizePixel = 0,
-        Position = UDim2.fromOffset(82, 52),
-        Size = UDim2.fromOffset(78, 20),
-        Parent = header,
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(108, 68),
+        Size = UDim2.new(1, -180, 0, 16),
+        Font = Theme.Font,
+        Text = "What's new in this update",
+        TextColor3 = Color3.fromRGB(255, 200, 205),
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4,
+        Parent = hero,
     })
-    Corner(verPill, 10)
-    Stroke(verPill, Theme.Accent, 1)
+
+    local verBadge = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.88,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -70, 0, 44),
+        Size = UDim2.fromOffset(84, 24),
+        ZIndex = 4,
+        Parent = hero,
+    })
+    Corner(verBadge, 12)
+    Stroke(verBadge, Color3.fromRGB(255, 200, 205), 1)
     Create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.fromScale(1, 1),
         Font = Theme.FontBold,
         Text = "v" .. version,
-        TextColor3 = Theme.Accent,
-        TextSize = 11,
-        Parent = verPill,
-    })
-
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(170, 52),
-        Size = UDim2.new(1, -200, 0, 20),
-        Font = Theme.Font,
-        Text = "What's new in this update",
-        TextColor3 = Theme.SubText,
+        TextColor3 = Color3.fromRGB(255, 220, 225),
         TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = header,
+        Parent = verBadge,
     })
 
-    -- Close button (visible ✕ symbol)
     local closeBtn = Create("TextButton", {
-        BackgroundColor3 = Theme.Tertiary,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -22, 0, 34),
+        Position = UDim2.new(1, -22, 0, 44),
         Size = UDim2.fromOffset(32, 32),
         Text = "✕",
         Font = Theme.FontBold,
-        TextColor3 = Theme.SubText,
+        TextColor3 = Color3.fromRGB(255, 220, 225),
         TextSize = 16,
         AutoButtonColor = false,
-        Parent = header,
+        ZIndex = 4,
+        Parent = hero,
     })
-    Corner(closeBtn, 9)
-    local closeStrk = Stroke(closeBtn, Theme.Border, 1)
+    Corner(closeBtn, 10)
     local closeScale = Create("UIScale", { Parent = closeBtn })
-
     closeBtn.MouseEnter:Connect(function()
-        Tween(closeBtn, 0.15, { BackgroundColor3 = Theme.Accent, TextColor3 = Color3.new(1, 1, 1) })
-        Tween(closeStrk, 0.15, { Color = Theme.Accent })
-        Tween(closeScale, 0.15, { Scale = 1.08 })
+        Tween(closeBtn, 0.15, { BackgroundTransparency = 0, TextColor3 = Theme.AccentDark })
+        Tween(closeScale, 0.15, { Scale = 1.1 })
     end)
     closeBtn.MouseLeave:Connect(function()
-        Tween(closeBtn, 0.15, { BackgroundColor3 = Theme.Tertiary, TextColor3 = Theme.SubText })
-        Tween(closeStrk, 0.15, { Color = Theme.Border })
+        Tween(closeBtn, 0.15, { BackgroundTransparency = 0.9, TextColor3 = Color3.fromRGB(255, 220, 225) })
         Tween(closeScale, 0.15, { Scale = 1 })
     end)
 
-    -- ============ SCROLL AREA ============
-    local footerH = 76
+    -- TYPE MAP (safe fallbacks)
+    local typeData = {
+        Added    = { Color = Color3.fromRGB(80, 220, 140),  Icon = "plus",       Fallback = "+",  Label = "Added"    },
+        Fixed    = { Color = Color3.fromRGB(90, 180, 250),  Icon = "wrench",     Fallback = "⚙",  Label = "Fixed"    },
+        Removed  = { Color = Color3.fromRGB(250, 100, 100), Icon = "x",          Fallback = "✕",  Label = "Removed"  },
+        Changed  = { Color = Color3.fromRGB(250, 200, 70),  Icon = "refresh-cw", Fallback = "↻",  Label = "Changed"  },
+        Improved = { Color = Color3.fromRGB(190, 130, 250), Icon = "sparkles",   Fallback = "✦",  Label = "Improved" },
+    }
+
+    local counts = {}
+    local parsed = {}
+    for i, entry in ipairs(entries) do
+        local eType, eText
+        if entry.Type and entry.Text then
+            eType, eText = entry.Type, entry.Text
+        else
+            for k, v in pairs(entry) do
+                eType, eText = k, v
+                break
+            end
+        end
+        counts[eType] = (counts[eType] or 0) + 1
+        parsed[i] = { Type = eType, Text = eText }
+    end
+
+    -- STATS BAR
+    local statsBar = Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(28, 142),
+        Size = UDim2.new(1, -56, 0, 26),
+        ZIndex = 4,
+        Parent = card,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = statsBar,
+    })
+
+    local statOrder = { "Added", "Fixed", "Changed", "Improved", "Removed" }
+    local statIdx = 0
+    for _, t in ipairs(statOrder) do
+        local n = counts[t]
+        if n and n > 0 then
+            statIdx = statIdx + 1
+            local data = typeData[t]
+            local chip = Create("Frame", {
+                BackgroundColor3 = data.Color,
+                BackgroundTransparency = 0.88,
+                BorderSizePixel = 0,
+                Size = UDim2.fromOffset(0, 24),
+                AutomaticSize = Enum.AutomaticSize.X,
+                LayoutOrder = statIdx,
+                Parent = statsBar,
+            })
+            Corner(chip, 12)
+            Stroke(chip, data.Color, 1)
+            Create("UIPadding", {
+                PaddingLeft = UDim.new(0, 8),
+                PaddingRight = UDim.new(0, 10),
+                Parent = chip,
+            })
+            Create("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 5),
+                Parent = chip,
+            })
+            local dot = Create("Frame", {
+                BackgroundColor3 = data.Color,
+                BorderSizePixel = 0,
+                Size = UDim2.fromOffset(8, 8),
+                LayoutOrder = 1,
+                Parent = chip,
+            })
+            Corner(dot, 4)
+            Create("TextLabel", {
+                BackgroundTransparency = 1,
+                AutomaticSize = Enum.AutomaticSize.X,
+                Size = UDim2.new(0, 0, 1, 0),
+                LayoutOrder = 2,
+                Font = Theme.FontBold,
+                Text = n .. " " .. data.Label,
+                TextColor3 = data.Color,
+                TextSize = 11,
+                Parent = chip,
+            })
+        end
+    end
+
+    -- SCROLL AREA
+    local footerH = 78
     local scroll = Create("ScrollingFrame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(22, 116),
-        Size = UDim2.new(1, -44, 1, -116 - footerH),
+        Position = UDim2.fromOffset(22, 180),
+        Size = UDim2.new(1, -44, 1, -180 - footerH),
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollBarThickness = 3,
-        ScrollBarImageColor3 = Theme.Border,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Theme.Accent,
         ScrollBarImageTransparency = 0.4,
         BorderSizePixel = 0,
-        ZIndex = 2,
+        ZIndex = 3,
         Parent = card,
     })
     Create("UIListLayout", {
@@ -690,135 +799,145 @@ function VexUI:ShowChangelog(opts)
     })
     Create("UIPadding", { PaddingRight = UDim.new(0, 6), Parent = scroll })
 
-    -- Type config with safe icons + fixed pill widths
-    local typeData = {
-        Added    = { Color = Theme.Success,                 Icon = "plus",       PillW = 60 },
-        Fixed    = { Color = Color3.fromRGB(90, 170, 240),  Icon = "wrench",     PillW = 58 },
-        Removed  = { Color = Color3.fromRGB(240, 100, 100), Icon = "trash",      PillW = 74 },
-        Changed  = { Color = Theme.Warning,                 Icon = "refresh-cw", PillW = 72 },
-        Improved = { Color = Color3.fromRGB(180, 120, 240), Icon = "sparkles",   PillW = 76 },
-    }
-
-    local rowCount = 0
-    for i, entry in ipairs(entries) do
-        local eType, eText
-        if entry.Type and entry.Text then
-            eType = entry.Type
-            eText = entry.Text
-        else
-            for k, v in pairs(entry) do
-                eType = k
-                eText = v
-                break
-            end
-        end
-
-        local data = typeData[eType] or { Color = Theme.Accent, Icon = "circle", PillW = 60 }
+    -- ROWS
+    for i, entry in ipairs(parsed) do
+        local data = typeData[entry.Type] or { Color = Theme.Accent, Icon = "info", Fallback = "•", Label = entry.Type or "Info" }
         local color = data.Color
-        rowCount = rowCount + 1
 
         local row = Create("Frame", {
-            BackgroundColor3 = Theme.Secondary,
-            BackgroundTransparency = 0.3,
+            BackgroundColor3 = Color3.fromRGB(24, 24, 30),
+            BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            Size = UDim2.new(1, -6, 0, 54),
+            Size = UDim2.new(1, -6, 0, 66),
             LayoutOrder = i,
             Parent = scroll,
         })
-        Corner(row, 10)
-        local rowStrk = Stroke(row, Theme.Border, 1)
+        Corner(row, 12)
+        local rowStrk = Stroke(row, Color3.fromRGB(40, 40, 50), 1)
 
-        -- Accent strip
-        local strip = Create("Frame", {
+        local stripBg = Create("Frame", {
             BackgroundColor3 = color,
+            BackgroundTransparency = 0.7,
             BorderSizePixel = 0,
-            Position = UDim2.new(0, 0, 0.5, 0),
-            AnchorPoint = Vector2.new(0, 0.5),
-            Size = UDim2.new(0, 3, 1, -18),
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(0, 6, 1, 0),
+            ZIndex = 2,
             Parent = row,
         })
-        Corner(strip, 3)
+        local stripInner = Create("Frame", {
+            BackgroundColor3 = color,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0.5, -1.5, 0.5, 0),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.new(0, 3, 1, -16),
+            ZIndex = 3,
+            Parent = stripBg,
+        })
+        Corner(stripInner, 3)
 
-        -- Icon badge
         local badge = Create("Frame", {
             BackgroundColor3 = color,
-            BackgroundTransparency = 0.85,
+            BackgroundTransparency = 0.78,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(14, 14),
-            Size = UDim2.fromOffset(26, 26),
+            Position = UDim2.fromOffset(20, 18),
+            Size = UDim2.fromOffset(30, 30),
+            ZIndex = 3,
             Parent = row,
         })
-        Corner(badge, 8)
-        local bic = NewIcon(badge, data.Icon, 14, color, "•")
-        bic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
-        bic.Instance.Position = UDim2.fromScale(0.5, 0.5)
+        Corner(badge, 10)
+        Stroke(badge, color, 1)
 
-        -- Type pill (fixed width)
-        local pill = Create("Frame", {
-            BackgroundColor3 = color,
-            BackgroundTransparency = 0.82,
-            BorderSizePixel = 0,
-            Position = UDim2.fromOffset(50, 9),
-            Size = UDim2.fromOffset(data.PillW, 17),
-            Parent = row,
+        local iconOk = false
+        local iconImg = Create("ImageLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromOffset(16, 16),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            ImageColor3 = color,
+            ScaleType = Enum.ScaleType.Fit,
+            ZIndex = 4,
+            Parent = badge,
         })
-        Corner(pill, 8)
+        local iconData = VexUI:GetIcon(data.Icon)
+        if iconData then
+            iconImg.Image = iconData.Url
+            iconImg.ImageRectOffset = iconData.ImageRectOffset or Vector2.new(0, 0)
+            iconImg.ImageRectSize = iconData.ImageRectSize or Vector2.new(0, 0)
+            iconOk = true
+        end
+        if not iconOk then
+            iconImg:Destroy()
+            Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(1, 1),
+                Font = Theme.FontBold,
+                Text = data.Fallback,
+                TextColor3 = color,
+                TextSize = 18,
+                ZIndex = 4,
+                Parent = badge,
+            })
+        end
+
         Create("TextLabel", {
             BackgroundTransparency = 1,
-            Size = UDim2.fromScale(1, 1),
+            Position = UDim2.fromOffset(62, 12),
+            Size = UDim2.new(1, -70, 0, 16),
             Font = Theme.FontBold,
-            Text = eType,
+            Text = string.upper(data.Label),
             TextColor3 = color,
             TextSize = 10,
-            TextXAlignment = Enum.TextXAlignment.Center,
-            Parent = pill,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 3,
+            Parent = row,
         })
 
-        -- Description
         Create("TextLabel", {
             BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(50, 30),
-            Size = UDim2.new(1, -62, 0, 16),
+            Position = UDim2.fromOffset(62, 30),
+            Size = UDim2.new(1, -78, 0, 22),
             Font = Theme.Font,
-            Text = tostring(eText),
-            TextColor3 = Theme.Text,
-            TextSize = 12,
+            Text = tostring(entry.Text),
+            TextColor3 = Color3.fromRGB(230, 230, 240),
+            TextSize = 13,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextYAlignment = Enum.TextYAlignment.Center,
             TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 3,
             Parent = row,
         })
 
-        -- Hover
         row.MouseEnter:Connect(function()
-            Tween(row, 0.15, { BackgroundTransparency = 0.05 })
-            Tween(rowStrk, 0.15, { Color = color })
+            Tween(row, 0.18, { BackgroundTransparency = 0.1, BackgroundColor3 = Color3.fromRGB(28, 28, 36) })
+            Tween(rowStrk, 0.18, { Color = color })
+            Tween(badge, 0.18, { BackgroundTransparency = 0.5 })
+            Tween(stripBg, 0.18, { BackgroundTransparency = 0.4 })
         end)
         row.MouseLeave:Connect(function()
-            Tween(row, 0.15, { BackgroundTransparency = 0.3 })
-            Tween(rowStrk, 0.15, { Color = Theme.Border })
+            Tween(row, 0.18, { BackgroundTransparency = 1, BackgroundColor3 = Color3.fromRGB(24, 24, 30) })
+            Tween(rowStrk, 0.18, { Color = Color3.fromRGB(40, 40, 50) })
+            Tween(badge, 0.18, { BackgroundTransparency = 0.78 })
+            Tween(stripBg, 0.18, { BackgroundTransparency = 0.7 })
         end)
 
-        -- Stagger fade-in
-        row.BackgroundTransparency = 1
-        task.delay(0.04 * i, function()
+        task.delay(0.05 * i, function()
             if row.Parent then
-                Tween(row, 0.25, { BackgroundTransparency = 0.3 })
+                Tween(row, 0.3, { BackgroundTransparency = 0.1 })
             end
         end)
     end
 
-    -- ============ FOOTER ============
+    -- FOOTER
     local footer = Create("Frame", {
-        BackgroundColor3 = Theme.Secondary,
+        BackgroundColor3 = Color3.fromRGB(18, 18, 24),
         BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 1, -footerH),
         Size = UDim2.new(1, 0, 0, footerH),
-        ZIndex = 2,
+        ZIndex = 5,
         Parent = card,
     })
     Create("Frame", {
-        BackgroundColor3 = Theme.Border,
+        BackgroundColor3 = Color3.fromRGB(40, 40, 50),
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 1),
         Parent = footer,
@@ -826,12 +945,12 @@ function VexUI:ShowChangelog(opts)
 
     Create("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(24, 14),
-        Size = UDim2.new(1, -200, 0, 16),
-        Font = Theme.Font,
-        Text = rowCount .. " change" .. (rowCount == 1 and "" or "s") .. " in this update",
-        TextColor3 = Theme.SubText,
-        TextSize = 11,
+        Position = UDim2.fromOffset(28, 16),
+        Size = UDim2.new(1, -220, 0, 16),
+        Font = Theme.FontBold,
+        Text = #entries .. " change" .. (#entries == 1 and "" or "s") .. " in this update",
+        TextColor3 = Theme.Text,
+        TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = footer,
     })
@@ -839,11 +958,11 @@ function VexUI:ShowChangelog(opts)
     if discord then
         Create("TextLabel", {
             BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(24, 32),
-            Size = UDim2.new(1, -200, 0, 16),
+            Position = UDim2.fromOffset(28, 36),
+            Size = UDim2.new(1, -220, 0, 16),
             Font = Theme.Font,
             Text = discord,
-            TextColor3 = Theme.SubText,
+            TextColor3 = Color3.fromRGB(140, 145, 165),
             TextSize = 11,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = footer,
@@ -854,20 +973,63 @@ function VexUI:ShowChangelog(opts)
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -24, 0.5, 0),
-        Size = UDim2.fromOffset(140, 40),
+        Position = UDim2.new(1, -28, 0.5, 0),
+        Size = UDim2.fromOffset(170, 46),
         Font = Theme.FontBold,
-        Text = "Continue",
-        TextColor3 = Color3.new(1, 1, 1),
-        TextSize = 13,
+        Text = "",
         AutoButtonColor = false,
         Parent = footer,
     })
-    Corner(okBtn, 10)
+    Corner(okBtn, 12)
     Gradient(okBtn, {
-        { 0, Theme.Accent },
+        { 0, Color3.fromRGB(220, 40, 55) },
         { 1, Theme.AccentDark },
     }, 45)
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(22, 0),
+        Size = UDim2.new(1, -50, 1, 0),
+        Font = Theme.FontBold,
+        Text = "Continue",
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 15,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 2,
+        Parent = okBtn,
+    })
+
+    local arrowIco = Create("ImageLabel", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -18, 0.5, 0),
+        Size = UDim2.fromOffset(16, 16),
+        ImageColor3 = Color3.new(1, 1, 1),
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 2,
+        Parent = okBtn,
+    })
+    local arrowData = VexUI:GetIcon("arrow-right")
+    if arrowData then
+        arrowIco.Image = arrowData.Url
+        arrowIco.ImageRectOffset = arrowData.ImageRectOffset or Vector2.new(0, 0)
+        arrowIco.ImageRectSize = arrowData.ImageRectSize or Vector2.new(0, 0)
+    else
+        arrowIco:Destroy()
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -18, 0.5, 0),
+            Size = UDim2.fromOffset(16, 16),
+            Font = Theme.FontBold,
+            Text = "→",
+            TextColor3 = Color3.new(1, 1, 1),
+            TextSize = 18,
+            ZIndex = 2,
+            Parent = okBtn,
+        })
+    end
+
     local btnScale = Create("UIScale", { Parent = okBtn })
     okBtn.MouseEnter:Connect(function()
         Tween(btnScale, 0.15, { Scale = 1.04 })
@@ -876,16 +1038,14 @@ function VexUI:ShowChangelog(opts)
         Tween(btnScale, 0.15, { Scale = 1 })
     end)
 
-    -- Entrance animation
-    Tween(card, 0.4, {
-        BackgroundTransparency = 0.02,
+    Tween(card, 0.45, {
+        BackgroundTransparency = 0,
         Position = UDim2.fromScale(0.5, 0.5),
     }, Enum.EasingStyle.Back)
-    Tween(shadow, 0.4, {
-        Position = UDim2.new(0.5, 0, 0.5, 6),
+    Tween(shadow, 0.45, {
+        Position = UDim2.new(0.5, 0, 0.5, 10),
     }, Enum.EasingStyle.Back)
 
-    -- Close
     local function close()
         Tween(card, 0.25, {
             BackgroundTransparency = 1,
@@ -893,7 +1053,7 @@ function VexUI:ShowChangelog(opts)
         })
         Tween(shadow, 0.25, {
             BackgroundTransparency = 1,
-            Position = UDim2.new(0.5, 0, 0.6, 6),
+            Position = UDim2.new(0.5, 0, 0.6, 10),
         })
         task.wait(0.3)
         gui:Destroy()
