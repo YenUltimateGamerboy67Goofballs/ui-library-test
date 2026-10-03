@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "home-changelog-4"
+VexUI.Build = "logo-5"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -333,6 +333,17 @@ local function TintIcon(ic, color, time)
     Tween(ic.Instance, time or 0.15, { [ic.Prop] = color })
 end
 
+local function IsCustomImage(icon)
+    local t = type(icon)
+    if t == "number" then
+        return true
+    end
+    if t == "string" then
+        return icon:sub(1, 13) == "rbxassetid://" or icon:sub(1, 4) == "http" or tonumber(icon) ~= nil
+    end
+    return false
+end
+
 -- ============ OPTION REGISTRY ============
 local function NewOption(kind, id, value)
     local obj = { Type = kind, Id = id, Value = value, _changed = {} }
@@ -632,7 +643,7 @@ function VexUI:ShowChangelog(opts)
         Improved = "sparkles",
         Changed = "refresh-cw",
         Fixed = "wrench",
-        Removed = "minus",
+        Removed = "trash-2",
     }
     local typeOrder = { "Added", "Improved", "Changed", "Fixed", "Removed" }
 
@@ -1190,13 +1201,19 @@ function VexUI:CreateWindow(opts)
         Parent = topBar,
     })
 
-    local logo = NewIcon(topBar, opts.Icon or "moon", 22, Theme.Accent, "V")
-    logo.Instance.Position = UDim2.new(0, 16, 0.5, -11)
+    -- Logo: eigene rbxassetid (opts.Logo) wird groesser und ohne Faerbung angezeigt
+    local logoSrc = opts.Logo or opts.Icon or "moon"
+    local customLogo = IsCustomImage(logoSrc)
+    local logoPx = customLogo and 32 or 22
+    local logo = NewIcon(topBar, logoSrc, logoPx, customLogo and Color3.new(1, 1, 1) or Theme.Accent, "V")
+    logo.Instance.AnchorPoint = Vector2.new(0, 0.5)
+    logo.Instance.Position = UDim2.new(0, customLogo and 12 or 16, 0.5, 0)
+    local titleX = customLogo and 52 or 48
 
     local titleHolder = Create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 48, 0, 0),
-        Size = UDim2.new(1, -170, 1, 0),
+        Position = UDim2.new(0, titleX, 0, 0),
+        Size = UDim2.new(1, -(titleX + 122), 1, 0),
         Parent = topBar,
     })
     Create("UIListLayout", {
@@ -1419,7 +1436,7 @@ function VexUI:CreateWindow(opts)
         })
         Corner(fb, 12)
         Stroke(fb, Theme.Border, 1)
-        local fic = NewIcon(fb, opts.Icon or "moon", 22, Theme.Accent, "V")
+        local fic = NewIcon(fb, logoSrc, customLogo and 30 or 22, customLogo and Color3.new(1, 1, 1) or Theme.Accent, "V")
         fic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
         fic.Instance.Position = UDim2.fromScale(0.5, 0.5)
         local drag = MakeDraggable(fb, fb)
