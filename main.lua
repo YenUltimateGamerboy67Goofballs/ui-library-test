@@ -63,13 +63,19 @@ Tab.__index = Tab
 local Groupbox = {}
 Groupbox.__index = Groupbox
 
--- ============ THEME ============
+-- ============ THEME (Tinted Borders statt grau) ============
 local Theme = {
     Background = Color3.fromRGB(10, 10, 13),
     Secondary = Color3.fromRGB(16, 16, 20),
     Tertiary = Color3.fromRGB(24, 24, 29),
     Card = Color3.fromRGB(7, 7, 9),
-    Border = Color3.fromRGB(42, 42, 50),
+
+    -- ===== TINTED BORDERS (lila/rot-Tint statt neutral grau) =====
+    Border        = Color3.fromRGB(48, 38, 56),   -- dunkles Lila-Grau
+    BorderLight   = Color3.fromRGB(70, 55, 85),   -- helleres Lila
+    BorderAccent  = Color3.fromRGB(95, 60, 110),  -- Akzent-Lila
+    BorderRed     = Color3.fromRGB(65, 32, 42),   -- Rötlicher Tint für Cards
+
     Text = Color3.fromRGB(235, 235, 240),
     SubText = Color3.fromRGB(140, 140, 155),
     Accent = Color3.fromRGB(200, 30, 40),
@@ -463,7 +469,7 @@ function VexUI:Notify(opts)
         Parent = holder,
     })
     Corner(notif, 8)
-    Stroke(notif, Theme.Border, 1)
+    Stroke(notif, Theme.BorderLight, 1)
 
     local accent = Create("Frame", {
         BackgroundColor3 = Theme.Accent,
@@ -662,7 +668,7 @@ local function Card(parent, size, bg, class)
         f.AutoButtonColor = false
     end
     Corner(f, 10)
-    Stroke(f, Theme.Border, 1)
+    Stroke(f, Theme.BorderRed, 1) -- Card-Stroke mit rotem Tint
     return f
 end
 
@@ -840,7 +846,7 @@ function VexUI:CreateWindow(opts)
         Parent = gui,
     })
     Corner(main, 12)
-    Stroke(main, Theme.Border, 1)
+    Stroke(main, Theme.BorderAccent, 1) -- Window-Stroke mit lila Tint
     local uiScale = Create("UIScale", { Parent = main })
 
     local topBar = Create("Frame", {
@@ -958,7 +964,7 @@ function VexUI:CreateWindow(opts)
         Parent = body,
     })
     Create("Frame", {
-        BackgroundColor3 = Theme.Border,
+        BackgroundColor3 = Theme.BorderLight,
         BorderSizePixel = 0,
         Position = UDim2.new(1, -1, 0, 0),
         Size = UDim2.new(0, 1, 1, 0),
@@ -999,7 +1005,7 @@ function VexUI:CreateWindow(opts)
         Parent = sidebar,
     })
     Corner(avatarBtn, 10)
-    Stroke(avatarBtn, Theme.Border, 1)
+    Stroke(avatarBtn, Theme.BorderAccent, 1)
     LoadAvatar(avatarBtn)
 
     MakeDraggable(main, topBar, function()
@@ -1086,7 +1092,7 @@ function VexUI:CreateWindow(opts)
             Parent = gui,
         })
         Corner(fb, 12)
-        Stroke(fb, Theme.Border, 1)
+        Stroke(fb, Theme.BorderAccent, 1)
         local fic = NewIcon(fb, opts.Icon or "moon", 22, Theme.Accent, "V")
         fic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
         fic.Instance.Position = UDim2.fromScale(0.5, 0.5)
@@ -1138,7 +1144,7 @@ function Window:AddTab(name, icon)
         Parent = self.TabBar,
     })
     Corner(btn, 10)
-    local strk = Stroke(btn, Theme.Border, 1)
+    local strk = Stroke(btn, Theme.BorderLight, 1)
     strk.Transparency = 1
 
     local ic = NewIcon(btn, icon, 20, Theme.SubText, string.upper(string.sub(name, 1, 1)))
@@ -1160,7 +1166,7 @@ function Window:AddTab(name, icon)
         Parent = btn,
     })
     Corner(tip, 6)
-    Stroke(tip, Theme.Border, 1)
+    Stroke(tip, Theme.BorderAccent, 1)
     Create("UIPadding", {
         PaddingLeft = UDim.new(0, 8),
         PaddingRight = UDim.new(0, 8),
@@ -1194,7 +1200,7 @@ function Window:AddTab(name, icon)
             CanvasSize = UDim2.new(0, 0, 0, 0),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             ScrollBarThickness = 2,
-            ScrollBarImageColor3 = Theme.Border,
+            ScrollBarImageColor3 = Theme.BorderAccent,
             ScrollingDirection = Enum.ScrollingDirection.Y,
             Parent = frame,
         })
@@ -1271,7 +1277,7 @@ function Window:AddHomeTab(opts)
         Parent = page,
     })
     Corner(avatarBox, 12)
-    Stroke(avatarBox, Theme.Border, 1)
+    Stroke(avatarBox, Theme.BorderAccent, 1)
     LoadAvatar(avatarBox)
 
     local header = Card(page, UDim2.new(1, -72, 0, 64), Theme.Card)
@@ -1623,7 +1629,7 @@ end
 -- ============ TAB ============
 function Tab:_SetActive(active)
     Tween(self._btn, 0.15, { BackgroundTransparency = active and 0 or 1 })
-    Tween(self._stroke, 0.15, { Transparency = active and 0 or 1 })
+    Tween(self._stroke, 0.15, { Transparency = active and 0 or 1, Color = active and Theme.BorderAccent or Theme.BorderLight })
     TintIcon(self._icon, active and Theme.Text or Theme.SubText)
 end
 
@@ -1635,7 +1641,6 @@ function Tab:AddRightGroupbox(name, icon)
     return self:_AddGroupbox(name, icon, self.Right)
 end
 
--- *** FIXED: Stroke wird erst nach dem ersten Render-Frame erstellt ***
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({
         Name = name,
@@ -1644,7 +1649,6 @@ function Tab:_AddGroupbox(name, icon, column)
         _n = 0,
     }, Groupbox)
 
-    -- Start mit Header-Höhe (nicht 0!), damit der Stroke sofort weiß wo er rendern soll
     local frame = Create("Frame", {
         Name = name,
         BackgroundColor3 = Theme.Secondary,
@@ -1656,13 +1660,12 @@ function Tab:_AddGroupbox(name, icon, column)
     })
     Corner(frame, 8)
 
-    -- Stroke erst NACH dem ersten Render-Frame erstellen
-    -- das fixt den Ghost-Stroke Bug bei AutomaticSize
+    -- Stroke mit lila Tint erst nach Render-Frame erstellen (fix für Ghost-Stroke)
     task.spawn(function()
         RunService.RenderStepped:Wait()
         if not frame.Parent then return end
         local stroke = Create("UIStroke", {
-            Color = Theme.Border,
+            Color = Theme.BorderAccent, -- Lila Tint statt grau
             Thickness = 1,
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
             LineJoinMode = Enum.LineJoinMode.Round,
@@ -1697,7 +1700,7 @@ function Tab:_AddGroupbox(name, icon, column)
         Parent = titleFrame,
     })
     Create("Frame", {
-        BackgroundColor3 = Theme.Border,
+        BackgroundColor3 = Theme.BorderLight, -- hellerer Tint
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 1),
         LayoutOrder = 2,
@@ -1748,7 +1751,7 @@ local function AddRow(self, height, clip)
         ClipsDescendants = clip or false,
     })
     Corner(row, 6)
-    Stroke(row, Theme.Border, 1)
+    Stroke(row, Theme.Border, 1) -- Lila Tint statt grau
     return row
 end
 
@@ -1778,7 +1781,8 @@ end
 
 function Groupbox:AddDivider()
     return Add(self, "Frame", {
-        BackgroundColor3 = Theme.Border,
+        BackgroundColor3 = Theme.BorderLight, -- hellerer Tint statt grau
+        BackgroundTransparency = 0.3,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 1),
     })
@@ -2025,7 +2029,7 @@ function Groupbox:AddDropdown(id, opts)
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollBarThickness = 2,
-        ScrollBarImageColor3 = Theme.Border,
+        ScrollBarImageColor3 = Theme.BorderAccent,
         Visible = false,
         Parent = row,
     })
@@ -2201,7 +2205,7 @@ function Groupbox:AddColorPicker(id, opts)
         Parent = row,
     })
     Corner(swatch, 4)
-    Stroke(swatch, Theme.Border, 1)
+    Stroke(swatch, Theme.BorderLight, 1)
     local hit = HitButton(row, 34)
 
     local area = Create("Frame", {
