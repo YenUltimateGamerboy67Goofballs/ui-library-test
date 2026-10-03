@@ -6,9 +6,7 @@
     local Window = Library:CreateWindow({
         Title = "Hidden - Fisch",
         Subtitle = ".gg/deinserver",
-        Icon = "moon",                       -- Lucide-Name, rbxassetid oder Zahl
-        -- Size = UDim2.fromOffset(700, 430),
-        -- ToggleKeybind = Enum.KeyCode.RightControl,
+        Icon = "moon",
     })
 
     local Home = Window:AddHomeTab({
@@ -23,15 +21,14 @@
     Box:AddDropdown("Mode", { Text = "Mode", Values = { "Legit", "Rage" } })
     Box:AddButton("Test", { Icon = "zap", Callback = function() Library:Notify({ Title = "Hi", Description = "Klappt" }) end })
 
-    Window:AddSettingsTab()                  -- Keybind, Unload, Config speichern/laden
+    Window:AddSettingsTab()
 
-    Zugriff auf Werte (wie Obsidian):
-        Library.Toggles.AutoFarm.Value
-        Library.Options.Speed.Value
-        Library.Toggles.AutoFarm:OnChanged(function(v) end)
-        Library.Toggles.AutoFarm:SetValue(true)
+    Library.Toggles.AutoFarm.Value
+    Library.Options.Speed.Value
+    Library.Toggles.AutoFarm:OnChanged(function(v) end)
+    Library.Toggles.AutoFarm:SetValue(true)
 
-    Icons: https://lucide.dev/icons  (Namen wie "house", "map-pin", "settings", "bell" ...)
+    Icons: https://lucide.dev/icons
 ]]
 
 local VexUI = {
@@ -48,18 +45,17 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
 local LocalizationService = game:GetService("LocalizationService")
 local LocalPlayer = Players.LocalPlayer
 
--- Alte Instanz entfernen (Re-Execute)
 local GENV = (getgenv and getgenv()) or _G
 if GENV.VexUI_Instance and GENV.VexUI_Instance.Unload then
     pcall(GENV.VexUI_Instance.Unload, GENV.VexUI_Instance)
 end
 GENV.VexUI_Instance = VexUI
 
--- Klassen vorab deklarieren (wichtig: vor ihrer ersten Benutzung!)
 local Window = {}
 Window.__index = Window
 local Tab = {}
@@ -126,6 +122,7 @@ local function Stroke(inst, color, thickness)
         Color = color or Theme.Border,
         Thickness = thickness or 1,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        LineJoinMode = Enum.LineJoinMode.Round,
         Parent = inst,
     })
 end
@@ -140,7 +137,6 @@ local function Tween(inst, time, props, style, dir)
     return t
 end
 
--- Verlauf als Hintergrund: keypoints = { {0, Color3}, {1, Color3} }
 local function Gradient(frame, keypoints, rotation)
     local seq = {}
     for _, k in ipairs(keypoints) do
@@ -153,7 +149,6 @@ local function Gradient(frame, keypoints, rotation)
     })
 end
 
--- Farbiger "Glow" in einer Ecke einer Karte
 local function Glow(parent, color, rotation, strength)
     local g = Create("Frame", {
         Name = "Glow",
@@ -200,7 +195,6 @@ local function Copy(text)
     return false
 end
 
--- Fenster verschiebbar machen (beruecksichtigt UIScale, Touch)
 local function MakeDraggable(frame, handle, getScale)
     local state = { Moved = 0 }
     local dragging, dragStart, startPos
@@ -236,7 +230,6 @@ local function MakeDraggable(frame, handle, getScale)
     return state
 end
 
--- Drag auf Slider/Farbfeld (deaktiviert waehrenddessen das Scrollen der Spalte)
 local function TrackDrag(hit, column, onMove)
     local dragging = false
     local function setScroll(v)
@@ -283,12 +276,10 @@ end
 
 local IconAliases = { home = "house", gear = "settings", close = "x", plus = "plus", search = "search" }
 
--- Eigenen Icon-Provider setzen (optional)
 function VexUI:SetIconModule(mod)
     IconModule = mod
 end
 
--- Eigene Icons registrieren: Library:AddIcon("logo", 123456789)
 function VexUI:AddIcon(name, asset)
     local url = type(asset) == "number" and ("rbxassetid://" .. asset) or asset
     self.CustomIcons[name] = {
@@ -298,7 +289,6 @@ function VexUI:AddIcon(name, asset)
     }
 end
 
--- Liefert { Url, ImageRectOffset, ImageRectSize } oder nil
 function VexUI:GetIcon(icon)
     local t = type(icon)
     if t == "table" then
@@ -342,7 +332,6 @@ local function SetIcon(img, icon)
     return true
 end
 
--- Icon erzeugen; wenn nicht gefunden -> Fallback-Text (z.B. erster Buchstabe)
 local function NewIcon(parent, icon, px, color, fallback)
     local img = Create("ImageLabel", {
         BackgroundTransparency = 1,
@@ -371,7 +360,7 @@ local function TintIcon(ic, color, time)
     Tween(ic.Instance, time or 0.15, { [ic.Prop] = color })
 end
 
--- ============ OPTION-REGISTRY (Toggles / Options) ============
+-- ============ OPTION-REGISTRY ============
 local function NewOption(kind, id, value)
     local obj = { Type = kind, Id = id, Value = value, _changed = {} }
 
@@ -460,7 +449,6 @@ function VexUI:Notify(opts)
     local text = opts.Description or opts.Text or ""
     local duration = opts.Time or 4
 
-    -- Holder haelt die Layout-Position, die Notif selbst wird animiert
     local holder = Create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 62),
@@ -524,7 +512,7 @@ function VexUI:Notify(opts)
     end)
 end
 
--- ============ KONFIG SPEICHERN / LADEN ============
+-- ============ KONFIG ============
 local ConfigFolder = "VexUI/configs"
 
 local function HasFS()
@@ -643,7 +631,7 @@ function VexUI:Unload()
     end
 end
 
--- ============ KARTEN-HELFER (Home-Dashboard) ============
+-- ============ KARTEN-HELFER ============
 local AvatarCache
 
 local function LoadAvatar(img)
@@ -802,7 +790,6 @@ local function JoinDiscord(invite)
         or invite
     Copy("https://discord.gg/" .. code)
 
-    -- Versucht den Invite direkt im lokalen Discord-Client zu oeffnen
     local req = (syn and syn.request) or request or http_request or (http and http.request)
     if req then
         pcall(req, {
@@ -856,7 +843,6 @@ function VexUI:CreateWindow(opts)
     Stroke(main, Theme.Border, 1)
     local uiScale = Create("UIScale", { Parent = main })
 
-    -- Top bar
     local topBar = Create("Frame", {
         Name = "TopBar",
         BackgroundTransparency = 1,
@@ -910,7 +896,6 @@ function VexUI:CreateWindow(opts)
         Parent = titleHolder,
     })
 
-    -- Buttons rechts (Minimize / Close)
     local btnHolder = Create("Frame", {
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 0.5),
@@ -957,7 +942,6 @@ function VexUI:CreateWindow(opts)
     local minBtn = TopButton(1, "minus", "-")
     local closeBtn = TopButton(2, "x", "x")
 
-    -- Body: Sidebar + Content
     local body = Create("Frame", {
         Name = "Body",
         BackgroundTransparency = 1,
@@ -965,7 +949,7 @@ function VexUI:CreateWindow(opts)
         Size = UDim2.new(1, 0, 1, -46),
         Parent = main,
     })
-    -- Hoeheres ZIndex, damit Tooltips ueber dem Content liegen
+
     local sidebar = Create("Frame", {
         Name = "Sidebar",
         BackgroundTransparency = 1,
@@ -1003,7 +987,6 @@ function VexUI:CreateWindow(opts)
         Parent = body,
     })
 
-    -- Avatar unten in der Sidebar
     local avatarBtn = Create("ImageButton", {
         Name = "Avatar",
         BackgroundColor3 = Theme.Tertiary,
@@ -1040,7 +1023,6 @@ function VexUI:CreateWindow(opts)
         Size = size,
     }, Window)
 
-    -- Auto-Scale (kleine Bildschirme / Handy)
     local function updateScale()
         local cam = workspace.CurrentCamera
         if not cam then
@@ -1080,7 +1062,6 @@ function VexUI:CreateWindow(opts)
         end
     end)
 
-    -- Toggle per Taste
     Connect(UserInputService.InputBegan, function(input, gpe)
         if gpe then
             return
@@ -1090,7 +1071,6 @@ function VexUI:CreateWindow(opts)
         end
     end)
 
-    -- Schwebender Button (Handy / auf Wunsch)
     local wantButton = opts.ToggleButton
     if wantButton == nil then
         wantButton = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -1165,7 +1145,6 @@ function Window:AddTab(name, icon)
     ic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
     ic.Instance.Position = UDim2.fromScale(0.5, 0.5)
 
-    -- Tooltip mit Tab-Namen
     local tip = Create("TextLabel", {
         BackgroundColor3 = Theme.Secondary,
         AnchorPoint = Vector2.new(0, 0.5),
@@ -1205,7 +1184,6 @@ function Window:AddTab(name, icon)
         Parent = frame,
     })
 
-    -- Zwei Spalten (Left / Right), jeweils scrollbar
     local function Column(nameStr, pos)
         local col = Create("ScrollingFrame", {
             Name = nameStr,
@@ -1285,7 +1263,6 @@ function Window:AddHomeTab(opts)
     self.HomeTab = tab
     local page = tab.Frame
 
-    -- Header: Avatar + Begruessung
     local avatarBox = Create("ImageLabel", {
         BackgroundColor3 = Theme.Tertiary,
         BorderSizePixel = 0,
@@ -1330,7 +1307,6 @@ function Window:AddHomeTab(opts)
         Parent = hl,
     })
 
-    -- Zwei Spalten
     local cols = Create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(0, 72),
@@ -1354,7 +1330,6 @@ function Window:AddHomeTab(opts)
     local left = ColumnFrame(UDim2.new(0, 0, 0, 0))
     local right = ColumnFrame(UDim2.new(0.5, 4, 0, 0))
 
-    -- Server-Karte
     local hasDiscord = opts.Discord ~= nil and opts.Discord ~= ""
     local server = Card(left, hasDiscord and UDim2.new(1, 0, 0.72, -4) or UDim2.new(1, 0, 1, 0), Theme.Card)
     server.LayoutOrder = 1
@@ -1393,7 +1368,6 @@ function Window:AddHomeTab(opts)
     local tTime = StatTile(r3, 1, "In server for", "00:00:00", 0.42)
     StatTile(r3, 2, "Join Script", "Tap to copy join script", 0.58, joinScript)
 
-    -- Discord-Karte
     if hasDiscord then
         local dc = Card(left, UDim2.new(1, 0, 0.28, -4), Color3.new(1, 1, 1), "TextButton")
         dc.LayoutOrder = 2
@@ -1436,7 +1410,6 @@ function Window:AddHomeTab(opts)
         end)
     end
 
-    -- Executor-Karte
     local required = opts.RequiredFunctions or { "loadstring" }
     local supported = true
     local env = (getgenv and getgenv()) or _G
@@ -1479,7 +1452,6 @@ function Window:AddHomeTab(opts)
         Parent = exec,
     })
 
-    -- Friends-Karte
     local friends = Card(right, UDim2.new(1, 0, 0.7, -4), Theme.Card)
     friends.LayoutOrder = 2
     Glow(friends, Theme.Warning, -135, 0.25)
@@ -1501,7 +1473,6 @@ function Window:AddHomeTab(opts)
     local tOnline = StatTile(fr2, 1, "Online", "-", 0.5)
     local tAll = StatTile(fr2, 2, "All", "-", 0.5)
 
-    -- Live-Daten
     local function refreshLive()
         tPlayers.Set(#Players:GetPlayers() .. " playing")
         tMax.Set(Players.MaxPlayers .. " players can join this server")
@@ -1551,7 +1522,6 @@ function Window:AddHomeTab(opts)
         end)
     end
 
-    -- Region (Naeherung: Land des Spielers, Roblox bietet keine echte Server-Region-API)
     task.spawn(function()
         local ok, region = pcall(function()
             return LocalizationService:GetCountryRegionForPlayerAsync(LocalPlayer)
@@ -1665,6 +1635,7 @@ function Tab:AddRightGroupbox(name, icon)
     return self:_AddGroupbox(name, icon, self.Right)
 end
 
+-- *** FIXED: Stroke wird erst nach dem ersten Render-Frame erstellt ***
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({
         Name = name,
@@ -1673,17 +1644,33 @@ function Tab:_AddGroupbox(name, icon, column)
         _n = 0,
     }, Groupbox)
 
+    -- Start mit Header-Höhe (nicht 0!), damit der Stroke sofort weiß wo er rendern soll
     local frame = Create("Frame", {
         Name = name,
         BackgroundColor3 = Theme.Secondary,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 40),
         AutomaticSize = Enum.AutomaticSize.Y,
         LayoutOrder = #self.Groupboxes + 1,
         Parent = column,
     })
     Corner(frame, 8)
-    Stroke(frame, Theme.Border, 1)
+
+    -- Stroke erst NACH dem ersten Render-Frame erstellen
+    -- das fixt den Ghost-Stroke Bug bei AutomaticSize
+    task.spawn(function()
+        RunService.RenderStepped:Wait()
+        if not frame.Parent then return end
+        local stroke = Create("UIStroke", {
+            Color = Theme.Border,
+            Thickness = 1,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            LineJoinMode = Enum.LineJoinMode.Round,
+            Parent = frame,
+        })
+        box.Stroke = stroke
+    end)
+
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
 
     local titleFrame = Create("Frame", {
@@ -1740,13 +1727,12 @@ function Tab:_AddGroupbox(name, icon, column)
 
     box.Frame = frame
     box.Container = container
-    box.Scroll = container -- Kompatibilitaet zur alten Version
+    box.Scroll = container
     table.insert(self.Groupboxes, box)
     return box
 end
 
 -- ============ GROUPBOX ============
--- Element in den Container einfuegen (feste Reihenfolge)
 local function Add(self, className, props)
     self._n = self._n + 1
     props.LayoutOrder = self._n
@@ -1964,7 +1950,6 @@ function Groupbox:AddSlider(id, opts)
     })
     Corner(thumb, 6)
 
-    -- Groessere Touch-Flaeche ueber dem Balken
     local hit = Create("TextButton", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 0, 0, 22),
@@ -2012,7 +1997,6 @@ function Groupbox:AddDropdown(id, opts)
     local open = false
     local obj, changed = NewOption("Dropdown", id, current)
 
-    -- Klappt inline auf (kein Clipping durch ScrollingFrame)
     local row = AddRow(self, 34, true)
     RowLabel(row, opts.Text or id, 130)
 
@@ -2220,7 +2204,6 @@ function Groupbox:AddColorPicker(id, opts)
     Stroke(swatch, Theme.Border, 1)
     local hit = HitButton(row, 34)
 
-    -- Picker-Bereich (klappt unter der Zeile auf)
     local area = Create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 10, 0, 40),
