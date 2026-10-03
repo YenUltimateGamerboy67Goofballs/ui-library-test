@@ -677,11 +677,14 @@ function VexUI:ShowChangelog(opts)
         end
         local box = Tab._AddGroupbox(fakeTab, typeName, typeIcons[typeName] or "info", scroll)
         for _, text in ipairs(list) do
-            local row = Add(box, "Frame", {
+            box._n = box._n + 1
+            local row = Create("Frame", {
                 BackgroundColor3 = Theme.Tertiary,
                 BorderSizePixel = 0,
                 Size = UDim2.new(1, 0, 0, 0),
                 AutomaticSize = Enum.AutomaticSize.Y,
+                LayoutOrder = box._n,
+                Parent = box.Container,
             })
             Corner(row, 6)
             Stroke(row, Theme.Border, 1)
