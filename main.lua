@@ -11,6 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
+VexUI.Build = "changelog-fix-3"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -689,27 +690,18 @@ function VexUI:ShowChangelog(opts)
             Corner(row, 6)
             Stroke(row, Theme.Border, 1)
             Create("UIPadding", {
-                PaddingTop = UDim.new(0, 9),
                 PaddingBottom = UDim.new(0, 9),
-                PaddingLeft = UDim.new(0, 12),
-                PaddingRight = UDim.new(0, 12),
-                Parent = row,
-            })
-            Create("UIListLayout", {
-                FillDirection = Enum.FillDirection.Horizontal,
-                SortOrder = Enum.SortOrder.LayoutOrder,
-                Padding = UDim.new(0, 10),
                 Parent = row,
             })
 
             local ic = NewIcon(row, typeIcons[typeName] or "info", 14, Theme.Accent, "•")
-            ic.Instance.LayoutOrder = 1
+            ic.Instance.Position = UDim2.fromOffset(12, 10)
 
             Create("TextLabel", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, -24, 0, 0),
+                Position = UDim2.fromOffset(36, 9),
+                Size = UDim2.new(1, -48, 0, 0),
                 AutomaticSize = Enum.AutomaticSize.Y,
-                LayoutOrder = 2,
                 Font = Theme.Font,
                 Text = text,
                 TextColor3 = Theme.Text,
@@ -828,6 +820,9 @@ function VexUI:ShowChangelog(opts)
         Tween(uiScale, 0.15, { Scale = targetScale * 0.94 })
         task.wait(0.15)
         gui:Destroy()
+        if opts.OnClose then
+            task.spawn(opts.OnClose)
+        end
     end
 
     closeBtn.MouseButton1Click:Connect(function()
