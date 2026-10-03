@@ -1,5 +1,5 @@
 --[[
-    VexUI v2 - Dashboard UI (Violet Accent, Fixed Strokes)
+    Ravine UI - Red Accent, Fixed Borders
 ]]
 
 local VexUI = {
@@ -26,37 +26,34 @@ if GENV.VexUI_Instance and GENV.VexUI_Instance.Unload then
 end
 GENV.VexUI_Instance = VexUI
 
-local Window = {}
+local Window, Tab, Groupbox = {}, {}, {}
 Window.__index = Window
-local Tab = {}
 Tab.__index = Tab
-local Groupbox = {}
 Groupbox.__index = Groupbox
 
--- ============ THEME (Violet) ============
+-- ============ THEME (Red Accent + Red Borders) ============
 local Theme = {
-    Background = Color3.fromRGB(11, 10, 15),
-    Secondary = Color3.fromRGB(17, 16, 22),
-    Tertiary = Color3.fromRGB(24, 22, 31),
-    Card = Color3.fromRGB(13, 12, 18),
+    Background = Color3.fromRGB(11, 10, 12),
+    Secondary = Color3.fromRGB(17, 15, 19),
+    Tertiary = Color3.fromRGB(24, 21, 27),
+    Card = Color3.fromRGB(13, 11, 15),
 
-    -- Borders (subtle violet tint)
-    Border        = Color3.fromRGB(42, 36, 56),
-    BorderLight   = Color3.fromRGB(60, 50, 80),
-    BorderAccent  = Color3.fromRGB(85, 70, 115),
+    -- RED Borders
+    Border        = Color3.fromRGB(58, 25, 30),
+    BorderLight   = Color3.fromRGB(85, 32, 40),
+    BorderAccent  = Color3.fromRGB(140, 40, 50),
 
-    Text = Color3.fromRGB(238, 236, 245),
-    SubText = Color3.fromRGB(145, 140, 165),
-    TextDim = Color3.fromRGB(105, 100, 125),
+    Text = Color3.fromRGB(240, 238, 242),
+    SubText = Color3.fromRGB(150, 145, 155),
+    TextDim = Color3.fromRGB(105, 100, 112),
 
-    -- Accent (Violet)
-    Accent = Color3.fromRGB(139, 92, 246),
-    AccentBright = Color3.fromRGB(167, 139, 250),
-    AccentDark = Color3.fromRGB(91, 33, 182),
-    AccentGlow = Color3.fromRGB(196, 181, 253),
+    Accent = Color3.fromRGB(220, 40, 55),
+    AccentBright = Color3.fromRGB(255, 70, 85),
+    AccentDark = Color3.fromRGB(140, 22, 32),
+    AccentGlow = Color3.fromRGB(255, 100, 115),
 
-    ToggleOn = Color3.fromRGB(139, 92, 246),
-    ToggleOff = Color3.fromRGB(50, 48, 62),
+    ToggleOn = Color3.fromRGB(220, 40, 55),
+    ToggleOff = Color3.fromRGB(52, 48, 56),
     Success = Color3.fromRGB(74, 222, 128),
     Warning = Color3.fromRGB(250, 204, 21),
     Danger = Color3.fromRGB(248, 113, 113),
@@ -67,7 +64,7 @@ local Theme = {
 }
 VexUI.Theme = Theme
 
--- ============ UTILITIES ============
+-- ============ UTILS ============
 local Connections = {}
 
 local function Connect(signal, fn)
@@ -87,10 +84,7 @@ local function Create(className, props)
 end
 
 local function Corner(inst, radius)
-    return Create("UICorner", {
-        CornerRadius = UDim.new(0, radius or Theme.CornerRadius),
-        Parent = inst,
-    })
+    return Create("UICorner", { CornerRadius = UDim.new(0, radius or Theme.CornerRadius), Parent = inst })
 end
 
 local function Stroke(inst, color, thickness)
@@ -102,23 +96,16 @@ local function Stroke(inst, color, thickness)
     })
 end
 
--- Force stroke re-render (fixes ghost stroke bug with AutomaticSize)
-local function BindStrokeRefresh(frame, stroke)
-    if not stroke then return end
-    local updating = false
-    frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        if updating then return end
-        updating = true
-        -- Toggle a harmless property to force re-render
-        stroke.Transparency = 0.011
-        task.defer(function()
-            task.wait()
-            if stroke and stroke.Parent then
-                stroke.Transparency = 0
-            end
-            updating = false
-        end)
-    end)
+-- Reliable "fake border" using two frames - no rendering bugs
+local function FrameBorder(parent, color, size, radius)
+    local outer = Create("Frame", {
+        BackgroundColor3 = color,
+        BorderSizePixel = 0,
+        Size = size,
+        Parent = parent,
+    })
+    Corner(outer, radius)
+    return outer
 end
 
 local function Tween(inst, time, props, style, dir)
@@ -134,11 +121,7 @@ local function Gradient(frame, keypoints, rotation)
     for _, k in ipairs(keypoints) do
         table.insert(seq, ColorSequenceKeypoint.new(k[1], k[2]))
     end
-    return Create("UIGradient", {
-        Color = ColorSequence.new(seq),
-        Rotation = rotation or 0,
-        Parent = frame,
-    })
+    return Create("UIGradient", { Color = ColorSequence.new(seq), Rotation = rotation or 0, Parent = frame })
 end
 
 local function Glow(parent, color, rotation, strength)
@@ -236,9 +219,7 @@ do
 end
 
 local IconAliases = { home = "house", gear = "settings", close = "x", plus = "plus", search = "search" }
-
 function VexUI:SetIconModule(mod) IconModule = mod end
-
 function VexUI:AddIcon(name, asset)
     local url = type(asset) == "number" and ("rbxassetid://" .. asset) or asset
     self.CustomIcons[name] = { Url = url, ImageRectOffset = Vector2.new(0, 0), ImageRectSize = Vector2.new(0, 0) }
@@ -291,13 +272,10 @@ local function TintIcon(ic, color, time)
     Tween(ic.Instance, time or 0.15, { [ic.Prop] = color })
 end
 
--- ============ OPTION REGISTRY ============
+-- ============ OPTIONS ============
 local function NewOption(kind, id, value)
     local obj = { Type = kind, Id = id, Value = value, _changed = {} }
-    function obj:OnChanged(fn)
-        table.insert(self._changed, fn)
-        return self
-    end
+    function obj:OnChanged(fn) table.insert(self._changed, fn); return self end
     local function changed(v)
         obj.Value = v
         for _, fn in ipairs(obj._changed) do task.spawn(fn, v) end
@@ -307,7 +285,6 @@ local function NewOption(kind, id, value)
     return obj, changed
 end
 
--- ============ GUI CONTAINER ============
 local function GetGuiParent()
     local ok, hui = pcall(function() return gethui and gethui() end)
     if ok and hui then return hui end
@@ -324,7 +301,7 @@ local function EnsureGui()
     return VexUI.Gui
 end
 
--- ============ NOTIFICATIONS (clean redesign) ============
+-- ============ NOTIFICATIONS ============
 local NotifContainer
 
 local function EnsureNotifContainer()
@@ -361,41 +338,32 @@ function VexUI:Notify(opts)
 
     local holder = Create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 68),
-        Parent = container,
+        Size = UDim2.new(1, 0, 0, 68), Parent = container,
     })
 
-    local notif = Create("Frame", {
-        Name = "Notif", BackgroundColor3 = Theme.Secondary,
+    -- Outer = red border
+    local outer = Create("Frame", {
+        Name = "Outer", BackgroundColor3 = Theme.BorderAccent,
         BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
         Position = UDim2.new(1, 350, 0, 0), Parent = holder,
     })
-    Corner(notif, 10)
+    Corner(outer, 10)
 
-    -- Gradient background for depth
-    Gradient(notif, {
-        { 0, Theme.Secondary },
-        { 1, Theme.Background },
-    }, 135)
-
-    -- Accent left bar (rounded, with gradient)
-    local accentBar = Create("Frame", {
-        BackgroundColor3 = accent, BorderSizePixel = 0,
-        Position = UDim2.new(0, 0, 0, 14),
-        Size = UDim2.new(0, 3, 1, -28),
-        Parent = notif,
+    -- Inner = content
+    local notif = Create("Frame", {
+        Name = "Inner", BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(1, 1),
+        Size = UDim2.new(1, -2, 1, -2), Parent = outer,
     })
-    Corner(accentBar, 3)
-    Gradient(accentBar, {
-        { 0, Theme.AccentBright },
-        { 1, Theme.AccentDark },
-    }, 90)
+    Corner(notif, 9)
+    Gradient(notif, { { 0, Theme.Secondary }, { 1, Theme.Background } }, 135)
 
-    -- Icon in soft-tinted box
+    -- Icon in red box
     local iconBox = Create("Frame", {
         BackgroundColor3 = accent, BackgroundTransparency = 0.85,
         BorderSizePixel = 0,
-        Position = UDim2.new(0, 14, 0, 16),
+        Position = UDim2.new(0, 14, 0.5, -18),
         Size = UDim2.fromOffset(36, 36), Parent = notif,
     })
     Corner(iconBox, 8)
@@ -421,11 +389,11 @@ function VexUI:Notify(opts)
         TextYAlignment = Enum.TextYAlignment.Top, Parent = notif,
     })
 
-    Tween(notif, 0.3, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Back)
+    Tween(outer, 0.3, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Back)
 
     task.delay(duration, function()
         pcall(function()
-            Tween(notif, 0.25, { Position = UDim2.new(1, 350, 0, 0) })
+            Tween(outer, 0.25, { Position = UDim2.new(1, 350, 0, 0) })
         end)
         task.wait(0.3)
         holder:Destroy()
@@ -435,10 +403,7 @@ end
 -- ============ CONFIG ============
 local ConfigFolder = "VexUI/configs"
 
-local function HasFS()
-    return writefile and readfile and isfile and isfolder and makefolder
-end
-
+local function HasFS() return writefile and readfile and isfile and isfolder and makefolder end
 local function EnsureFolders()
     if not isfolder("VexUI") then makefolder("VexUI") end
     if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
@@ -514,7 +479,6 @@ end
 
 -- ============ CARD HELPERS ============
 local AvatarCache
-
 local function LoadAvatar(img)
     task.spawn(function()
         if not AvatarCache then
@@ -526,16 +490,27 @@ local function LoadAvatar(img)
     end)
 end
 
+-- Card with reliable border (double frame)
 local function Card(parent, size, bg, class)
     local isButton = class == "TextButton"
-    local f = Create(class or "Frame", {
-        BackgroundColor3 = bg or Theme.Card, BorderSizePixel = 0,
-        Size = size, Parent = parent,
+    local outer = Create(class or "Frame", {
+        BackgroundColor3 = Theme.BorderAccent,
+        BorderSizePixel = 0, Size = size, Parent = parent,
+    })
+    if isButton then outer.Text = ""; outer.AutoButtonColor = false end
+    Corner(outer, 10)
+
+    local f = Create(isButton and "TextButton" or "Frame", {
+        BackgroundColor3 = bg or Theme.Card,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(1, 1),
+        Size = UDim2.new(1, -2, 1, -2),
+        Parent = outer,
     })
     if isButton then f.Text = ""; f.AutoButtonColor = false end
-    Corner(f, 10)
-    local strk = Stroke(f, Theme.Border, 1)
-    BindStrokeRefresh(f, strk)
+    Corner(f, 9)
+
+    f.Outer = outer
     return f
 end
 
@@ -577,7 +552,7 @@ end
 
 local function StatTile(row, order, title, value, wScale, onClick)
     local btn = Create("TextButton", {
-        BackgroundColor3 = Color3.fromRGB(22, 21, 28),
+        BackgroundColor3 = Color3.fromRGB(22, 20, 25),
         BackgroundTransparency = 0.15, BorderSizePixel = 0,
         Size = UDim2.new(wScale, -3, 1, 0),
         LayoutOrder = order, Text = "", AutoButtonColor = false, Parent = row,
@@ -647,23 +622,29 @@ end
 -- ============ WINDOW ============
 function VexUI:CreateWindow(opts)
     opts = opts or {}
-    local title = opts.Title or "VexUI"
+    local title = opts.Title or "Ravine"
     local subtitle = opts.Subtitle or ""
     local size = opts.Size or UDim2.fromOffset(700, 430)
     local gui = EnsureGui()
 
-    local main = Create("Frame", {
-        Name = "Main", AnchorPoint = Vector2.new(0.5, 0.5),
+    -- Outer = red border
+    local outer = Create("Frame", {
+        Name = "Outer", AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5), Size = size,
-        BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = opts.Transparency or 0.03,
-        BorderSizePixel = 0, ClipsDescendants = true, Parent = gui,
+        BackgroundColor3 = Theme.BorderAccent, BorderSizePixel = 0, Parent = gui,
+    })
+    Corner(outer, 13)
+
+    local main = Create("Frame", {
+        Name = "Main", BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(1, 1),
+        Size = UDim2.new(1, -2, 1, -2),
+        ClipsDescendants = true, Parent = outer,
     })
     Corner(main, 12)
-    local mainStroke = Stroke(main, Theme.BorderAccent, 1)
-    BindStrokeRefresh(main, mainStroke)
 
-    local uiScale = Create("UIScale", { Parent = main })
+    local uiScale = Create("UIScale", { Parent = outer })
 
     local topBar = Create("Frame", {
         Name = "TopBar", BackgroundTransparency = 1,
@@ -674,7 +655,7 @@ function VexUI:CreateWindow(opts)
         Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), Parent = topBar,
     })
 
-    local logo = NewIcon(topBar, opts.Icon or "moon", 22, Theme.Accent, "V")
+    local logo = NewIcon(topBar, opts.Icon or "moon", 22, Theme.Accent, "R")
     logo.Instance.Position = UDim2.new(0, 16, 0.5, -11)
 
     local titleHolder = Create("Frame", {
@@ -782,14 +763,13 @@ function VexUI:CreateWindow(opts)
         ScaleType = Enum.ScaleType.Crop, AutoButtonColor = false, Parent = sidebar,
     })
     Corner(avatarBtn, 10)
-    local avStroke = Stroke(avatarBtn, Theme.BorderAccent, 1)
-    BindStrokeRefresh(avatarBtn, avStroke)
+    Stroke(avatarBtn, Theme.BorderAccent, 1)
     LoadAvatar(avatarBtn)
 
-    MakeDraggable(main, topBar, function() return uiScale.Scale end)
+    MakeDraggable(outer, topBar, function() return uiScale.Scale end)
 
     local windowObj = setmetatable({
-        Gui = gui, Main = main, Body = body, TabBar = tabList,
+        Gui = gui, Outer = outer, Main = main, Body = body, TabBar = tabList,
         Content = content, Scale = uiScale, Title = title,
         Tabs = {}, ActiveTab = nil, HomeTab = nil,
         ToggleKeybind = opts.ToggleKeybind or Enum.KeyCode.RightControl,
@@ -811,23 +791,25 @@ function VexUI:CreateWindow(opts)
     avatarBtn.MouseButton1Click:Connect(function()
         if windowObj.HomeTab then windowObj:SelectTab(windowObj.HomeTab) end
     end)
-    closeBtn.MouseButton1Click:Connect(function() main.Visible = false end)
+    closeBtn.MouseButton1Click:Connect(function() outer.Visible = false end)
     minBtn.MouseButton1Click:Connect(function()
         windowObj.Minimized = not windowObj.Minimized
         if windowObj.Minimized then
-            Tween(main, 0.2, { Size = UDim2.new(size.X.Scale, size.X.Offset, 0, 46) })
+            Tween(outer, 0.2, { Size = UDim2.new(size.X.Scale, size.X.Offset, 0, 46) })
             task.delay(0.2, function()
                 if windowObj.Minimized then body.Visible = false end
             end)
         else
             body.Visible = true
-            Tween(main, 0.2, { Size = size })
+            Tween(outer, 0.2, { Size = size })
         end
     end)
 
     Connect(UserInputService.InputBegan, function(input, gpe)
         if gpe then return end
-        if input.KeyCode == windowObj.ToggleKeybind then windowObj:Toggle() end
+        if input.KeyCode == windowObj.ToggleKeybind then
+            outer.Visible = not outer.Visible
+        end
     end)
 
     local wantButton = opts.ToggleButton
@@ -843,12 +825,12 @@ function VexUI:CreateWindow(opts)
         })
         Corner(fb, 12)
         Stroke(fb, Theme.BorderAccent, 1)
-        local fic = NewIcon(fb, opts.Icon or "moon", 22, Theme.Accent, "V")
+        local fic = NewIcon(fb, opts.Icon or "moon", 22, Theme.Accent, "R")
         fic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
         fic.Instance.Position = UDim2.fromScale(0.5, 0.5)
         local drag = MakeDraggable(fb, fb)
         fb.MouseButton1Click:Connect(function()
-            if drag.Moved < 6 then windowObj:Toggle() end
+            if drag.Moved < 6 then outer.Visible = not outer.Visible end
         end)
         windowObj.ToggleButton = fb
     end
@@ -856,11 +838,11 @@ function VexUI:CreateWindow(opts)
     return windowObj
 end
 
-function Window:Toggle() self.Main.Visible = not self.Main.Visible end
+function Window:Toggle() self.Outer.Visible = not self.Outer.Visible end
 function Window:Notify(opts) VexUI:Notify(opts) end
 function Window:Destroy()
     self.Alive = false
-    self.Main:Destroy()
+    self.Outer:Destroy()
     if self.ToggleButton then self.ToggleButton:Destroy() end
 end
 
@@ -978,8 +960,7 @@ function Window:AddHomeTab(opts)
         ScaleType = Enum.ScaleType.Crop, Parent = page,
     })
     Corner(avatarBox, 12)
-    local avBoxStroke = Stroke(avatarBox, Theme.BorderAccent, 1)
-    BindStrokeRefresh(avatarBox, avBoxStroke)
+    Stroke(avatarBox, Theme.BorderAccent, 1)
     LoadAvatar(avatarBox)
 
     local header = Card(page, UDim2.new(1, -72, 0, 64), Theme.Card)
@@ -1099,9 +1080,9 @@ function Window:AddHomeTab(opts)
     exec.LayoutOrder = 1
     if supported then
         Gradient(exec, {
-            { 0, Color3.fromRGB(139, 92, 246) },
-            { 0.6, Color3.fromRGB(58, 40, 105) },
-            { 1, Color3.fromRGB(16, 12, 24) },
+            { 0, Color3.fromRGB(220, 40, 55) },
+            { 0.6, Color3.fromRGB(70, 20, 28) },
+            { 1, Color3.fromRGB(16, 9, 12) },
         }, 20)
     else
         Gradient(exec, {
@@ -1116,7 +1097,7 @@ function Window:AddHomeTab(opts)
         Size = UDim2.new(1, -28, 1, -40),
         Font = Theme.Font,
         Text = supported and "Your executor seems to support this script." or "Your executor might not support all features.",
-        TextColor3 = Color3.fromRGB(225, 220, 245), TextSize = 12,
+        TextColor3 = Color3.fromRGB(230, 225, 230), TextSize = 12,
         TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2, Parent = exec,
     })
@@ -1263,7 +1244,7 @@ end
 -- ============ TAB ============
 function Tab:_SetActive(active)
     Tween(self._btn, 0.15, { BackgroundTransparency = active and 0 or 1, BackgroundColor3 = active and Theme.Accent or Theme.Tertiary })
-    Tween(self._stroke, 0.15, { Transparency = active and 0.4 or 1, Color = Theme.Accent })
+    Tween(self._stroke, 0.15, { Transparency = active and 0.3 or 1, Color = Theme.AccentBright })
     TintIcon(self._icon, active and Color3.new(1, 1, 1) or Theme.SubText)
 end
 
@@ -1275,31 +1256,33 @@ function Tab:AddRightGroupbox(name, icon)
     return self:_AddGroupbox(name, icon, self.Right)
 end
 
+-- Groupbox uses DOUBLE FRAME border technique = no stroke bugs ever
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({ Name = name, Tab = self, Column = column, _n = 0 }, Groupbox)
 
-    local frame = Create("Frame", {
-        Name = name, BackgroundColor3 = Theme.Secondary,
+    -- OUTER = red border color
+    local outer = Create("Frame", {
+        Name = name .. "_Outer",
+        BackgroundColor3 = Theme.BorderAccent,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 42),
         AutomaticSize = Enum.AutomaticSize.Y,
-        LayoutOrder = #self.Groupboxes + 1, Parent = column,
+        LayoutOrder = #self.Groupboxes + 1,
+        Parent = column,
     })
-    Corner(frame, 8)
+    Corner(outer, 8)
 
-    -- Stroke created AFTER first render (avoids ghost stroke)
-    task.spawn(function()
-        RunService.RenderStepped:Wait()
-        if not frame.Parent then return end
-        local stroke = Create("UIStroke", {
-            Color = Theme.BorderAccent,
-            Thickness = 1,
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-            Parent = frame,
-        })
-        box.Stroke = stroke
-        BindStrokeRefresh(frame, stroke)
-    end)
+    -- INNER = actual content with 1px offset
+    local frame = Create("Frame", {
+        Name = name,
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(1, 1),
+        Size = UDim2.new(1, -2, 1, -2),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = outer,
+    })
+    Corner(frame, 7)
 
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = frame })
 
@@ -1344,6 +1327,7 @@ function Tab:_AddGroupbox(name, icon, column)
     })
 
     box.Frame = frame
+    box.Outer = outer
     box.Container = container
     box.Scroll = container
     table.insert(self.Groupboxes, box)
@@ -1365,8 +1349,7 @@ local function AddRow(self, height, clip)
         ClipsDescendants = clip or false,
     })
     Corner(row, 6)
-    local strk = Stroke(row, Theme.Border, 1)
-    BindStrokeRefresh(row, strk)
+    Stroke(row, Theme.Border, 1)
     return row
 end
 
@@ -1391,7 +1374,7 @@ end
 
 function Groupbox:AddDivider()
     return Add(self, "Frame", {
-        BackgroundColor3 = Theme.Border, BackgroundTransparency = 0.4,
+        BackgroundColor3 = Theme.Border, BackgroundTransparency = 0.3,
         BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1),
     })
 end
