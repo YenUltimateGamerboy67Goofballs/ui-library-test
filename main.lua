@@ -1,13 +1,6 @@
---[[
-    Ravine UI - Red Accent, Fixed Borders
-]]
+--[[ Ravine UI - Pure Red Borders + Fixed Groupboxes ]]
 
-local VexUI = {
-    Version = "2.0.0",
-    Toggles = {},
-    Options = {},
-    CustomIcons = {},
-}
+local VexUI = { Version = "2.1.0", Toggles = {}, Options = {}, CustomIcons = {} }
 VexUI.__index = VexUI
 
 local Players = game:GetService("Players")
@@ -31,32 +24,31 @@ Window.__index = Window
 Tab.__index = Tab
 Groupbox.__index = Groupbox
 
--- ============ THEME (Red Accent + Red Borders) ============
+-- ============ THEME (PURE RED) ============
 local Theme = {
-    Background = Color3.fromRGB(11, 10, 12),
-    Secondary = Color3.fromRGB(17, 15, 19),
-    Tertiary = Color3.fromRGB(24, 21, 27),
-    Card = Color3.fromRGB(13, 11, 15),
+    Background = Color3.fromRGB(11, 10, 11),
+    Secondary = Color3.fromRGB(18, 16, 18),
+    Tertiary = Color3.fromRGB(25, 22, 24),
+    Card = Color3.fromRGB(13, 11, 13),
 
-    -- RED Borders
-    Border        = Color3.fromRGB(58, 25, 30),
-    BorderLight   = Color3.fromRGB(85, 32, 40),
-    BorderAccent  = Color3.fromRGB(140, 40, 50),
+    -- PURE RED borders
+    Border        = Color3.fromRGB(60, 25, 28),
+    BorderLight   = Color3.fromRGB(90, 30, 35),
+    BorderAccent  = Color3.fromRGB(200, 45, 55),  -- HELLES ROT
 
-    Text = Color3.fromRGB(240, 238, 242),
-    SubText = Color3.fromRGB(150, 145, 155),
-    TextDim = Color3.fromRGB(105, 100, 112),
+    Text = Color3.fromRGB(240, 238, 240),
+    SubText = Color3.fromRGB(150, 145, 150),
+    TextDim = Color3.fromRGB(105, 100, 108),
 
     Accent = Color3.fromRGB(220, 40, 55),
     AccentBright = Color3.fromRGB(255, 70, 85),
-    AccentDark = Color3.fromRGB(140, 22, 32),
+    AccentDark = Color3.fromRGB(140, 22, 30),
     AccentGlow = Color3.fromRGB(255, 100, 115),
 
     ToggleOn = Color3.fromRGB(220, 40, 55),
-    ToggleOff = Color3.fromRGB(52, 48, 56),
+    ToggleOff = Color3.fromRGB(52, 48, 52),
     Success = Color3.fromRGB(74, 222, 128),
     Warning = Color3.fromRGB(250, 204, 21),
-    Danger = Color3.fromRGB(248, 113, 113),
 
     Font = Enum.Font.GothamMedium,
     FontBold = Enum.Font.GothamBold,
@@ -66,15 +58,12 @@ VexUI.Theme = Theme
 
 -- ============ UTILS ============
 local Connections = {}
-
 local function Connect(signal, fn)
-    local c = signal:Connect(fn)
-    table.insert(Connections, c)
-    return c
+    local c = signal:Connect(fn); table.insert(Connections, c); return c
 end
 
-local function Create(className, props)
-    local inst = Instance.new(className)
+local function Create(class, props)
+    local inst = Instance.new(class)
     local parent
     for k, v in pairs(props or {}) do
         if k == "Parent" then parent = v else inst[k] = v end
@@ -89,38 +78,21 @@ end
 
 local function Stroke(inst, color, thickness)
     return Create("UIStroke", {
-        Color = color or Theme.Border,
-        Thickness = thickness or 1,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-        Parent = inst,
+        Color = color or Theme.Border, Thickness = thickness or 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = inst,
     })
-end
-
--- Reliable "fake border" using two frames - no rendering bugs
-local function FrameBorder(parent, color, size, radius)
-    local outer = Create("Frame", {
-        BackgroundColor3 = color,
-        BorderSizePixel = 0,
-        Size = size,
-        Parent = parent,
-    })
-    Corner(outer, radius)
-    return outer
 end
 
 local function Tween(inst, time, props, style, dir)
     local t = TweenService:Create(inst, TweenInfo.new(
         time or 0.15, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out
     ), props)
-    t:Play()
-    return t
+    t:Play(); return t
 end
 
 local function Gradient(frame, keypoints, rotation)
     local seq = {}
-    for _, k in ipairs(keypoints) do
-        table.insert(seq, ColorSequenceKeypoint.new(k[1], k[2]))
-    end
+    for _, k in ipairs(keypoints) do table.insert(seq, ColorSequenceKeypoint.new(k[1], k[2])) end
     return Create("UIGradient", { Color = ColorSequence.new(seq), Rotation = rotation or 0, Parent = frame })
 end
 
@@ -165,8 +137,7 @@ local function MakeDraggable(frame, handle, getScale)
     local state = { Moved = 0 }
     local dragging, dragStart, startPos
     handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; state.Moved = 0
             dragStart = input.Position; startPos = frame.Position
             input.Changed:Connect(function()
@@ -175,8 +146,7 @@ local function MakeDraggable(frame, handle, getScale)
         end
     end)
     Connect(UserInputService.InputChanged, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch) then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local s = getScale and getScale() or 1
             local d = (input.Position - dragStart) / s
             state.Moved = math.max(state.Moved, d.Magnitude)
@@ -190,20 +160,17 @@ local function TrackDrag(hit, column, onMove)
     local dragging = false
     local function setScroll(v) if column then column.ScrollingEnabled = v end end
     hit.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; setScroll(false); onMove(input.Position)
         end
     end)
     Connect(UserInputService.InputChanged, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch) then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             onMove(input.Position)
         end
     end)
     Connect(UserInputService.InputEnded, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch) then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
             dragging = false; setScroll(true)
         end
     end)
@@ -218,13 +185,12 @@ do
     if ok and type(mod) == "table" then IconModule = mod end
 end
 
-local IconAliases = { home = "house", gear = "settings", close = "x", plus = "plus", search = "search" }
+local IconAliases = { home = "house", gear = "settings", close = "x" }
 function VexUI:SetIconModule(mod) IconModule = mod end
 function VexUI:AddIcon(name, asset)
     local url = type(asset) == "number" and ("rbxassetid://" .. asset) or asset
     self.CustomIcons[name] = { Url = url, ImageRectOffset = Vector2.new(0, 0), ImageRectSize = Vector2.new(0, 0) }
 end
-
 function VexUI:GetIcon(icon)
     local t = type(icon)
     if t == "table" then return icon.Url and icon or nil end
@@ -243,7 +209,6 @@ function VexUI:GetIcon(icon)
     end
     return nil
 end
-
 local function SetIcon(img, icon)
     local data = VexUI:GetIcon(icon)
     if not data then return false end
@@ -252,7 +217,6 @@ local function SetIcon(img, icon)
     img.ImageRectSize = data.ImageRectSize or Vector2.new(0, 0)
     return true
 end
-
 local function NewIcon(parent, icon, px, color, fallback)
     local img = Create("ImageLabel", {
         BackgroundTransparency = 1, Size = UDim2.fromOffset(px, px),
@@ -267,10 +231,7 @@ local function NewIcon(parent, icon, px, color, fallback)
     })
     return { Instance = lbl, Prop = "TextColor3", Ok = false }
 end
-
-local function TintIcon(ic, color, time)
-    Tween(ic.Instance, time or 0.15, { [ic.Prop] = color })
-end
+local function TintIcon(ic, color, time) Tween(ic.Instance, time or 0.15, { [ic.Prop] = color }) end
 
 -- ============ OPTIONS ============
 local function NewOption(kind, id, value)
@@ -290,7 +251,6 @@ local function GetGuiParent()
     if ok and hui then return hui end
     return CoreGui
 end
-
 local function EnsureGui()
     if VexUI.Gui and VexUI.Gui.Parent then return VexUI.Gui end
     VexUI.Gui = Create("ScreenGui", {
@@ -303,7 +263,6 @@ end
 
 -- ============ NOTIFICATIONS ============
 local NotifContainer
-
 local function EnsureNotifContainer()
     if NotifContainer and NotifContainer.Parent then return NotifContainer end
     VexUI.NotifGui = Create("ScreenGui", {
@@ -334,34 +293,26 @@ function VexUI:Notify(opts)
     local title = opts.Title or "Notification"
     local text = opts.Description or opts.Text or ""
     local duration = opts.Time or 4
-    local accent = opts.Accent or Theme.Accent
 
     local holder = Create("Frame", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 68), Parent = container,
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 68), Parent = container,
     })
-
-    -- Outer = red border
     local outer = Create("Frame", {
         Name = "Outer", BackgroundColor3 = Theme.BorderAccent,
         BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
         Position = UDim2.new(1, 350, 0, 0), Parent = holder,
     })
     Corner(outer, 10)
-
-    -- Inner = content
     local notif = Create("Frame", {
-        Name = "Inner", BackgroundColor3 = Theme.Secondary,
-        BorderSizePixel = 0,
+        BackgroundColor3 = Theme.Secondary, BorderSizePixel = 0,
         Position = UDim2.fromOffset(1, 1),
         Size = UDim2.new(1, -2, 1, -2), Parent = outer,
     })
     Corner(notif, 9)
     Gradient(notif, { { 0, Theme.Secondary }, { 1, Theme.Background } }, 135)
 
-    -- Icon in red box
     local iconBox = Create("Frame", {
-        BackgroundColor3 = accent, BackgroundTransparency = 0.85,
+        BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.85,
         BorderSizePixel = 0,
         Position = UDim2.new(0, 14, 0.5, -18),
         Size = UDim2.fromOffset(36, 36), Parent = notif,
@@ -372,37 +323,28 @@ function VexUI:Notify(opts)
     ic.Instance.Position = UDim2.fromScale(0.5, 0.5)
 
     Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 60, 0, 16),
-        Size = UDim2.new(1, -72, 0, 18),
-        Font = Theme.FontBold, Text = title,
-        TextColor3 = Theme.Text, TextSize = 14,
+        BackgroundTransparency = 1, Position = UDim2.new(0, 60, 0, 16),
+        Size = UDim2.new(1, -72, 0, 18), Font = Theme.FontBold,
+        Text = title, TextColor3 = Theme.Text, TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left, Parent = notif,
     })
     Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 60, 0, 34),
-        Size = UDim2.new(1, -72, 1, -40),
-        Font = Theme.Font, Text = text,
-        TextColor3 = Theme.SubText, TextSize = 12,
+        BackgroundTransparency = 1, Position = UDim2.new(0, 60, 0, 34),
+        Size = UDim2.new(1, -72, 1, -40), Font = Theme.Font,
+        Text = text, TextColor3 = Theme.SubText, TextSize = 12,
         TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top, Parent = notif,
     })
 
     Tween(outer, 0.3, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Back)
-
     task.delay(duration, function()
-        pcall(function()
-            Tween(outer, 0.25, { Position = UDim2.new(1, 350, 0, 0) })
-        end)
-        task.wait(0.3)
-        holder:Destroy()
+        pcall(function() Tween(outer, 0.25, { Position = UDim2.new(1, 350, 0, 0) }) end)
+        task.wait(0.3); holder:Destroy()
     end)
 end
 
 -- ============ CONFIG ============
 local ConfigFolder = "VexUI/configs"
-
 local function HasFS() return writefile and readfile and isfile and isfolder and makefolder end
 local function EnsureFolders()
     if not isfolder("VexUI") then makefolder("VexUI") end
@@ -462,8 +404,7 @@ function VexUI:ListConfigs()
             if n then table.insert(out, n) end
         end
     end)
-    table.sort(out)
-    return out
+    table.sort(out); return out
 end
 
 function VexUI:Unload()
@@ -472,64 +413,52 @@ function VexUI:Unload()
     table.clear(Connections)
     if self.Gui then self.Gui:Destroy() end
     if self.NotifGui then self.NotifGui:Destroy() end
-    table.clear(self.Toggles)
-    table.clear(self.Options)
+    table.clear(self.Toggles); table.clear(self.Options)
     if GENV.VexUI_Instance == self then GENV.VexUI_Instance = nil end
 end
 
--- ============ CARD HELPERS ============
+-- ============ HELPERS ============
 local AvatarCache
 local function LoadAvatar(img)
     task.spawn(function()
         if not AvatarCache then
-            local ok, url = pcall(Players.GetUserThumbnailAsync, Players, LocalPlayer.UserId,
-                Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+            local ok, url = pcall(Players.GetUserThumbnailAsync, Players, LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
             if ok then AvatarCache = url end
         end
         if AvatarCache and img.Parent then img.Image = AvatarCache end
     end)
 end
 
--- Card with reliable border (double frame)
 local function Card(parent, size, bg, class)
     local isButton = class == "TextButton"
     local outer = Create(class or "Frame", {
-        BackgroundColor3 = Theme.BorderAccent,
-        BorderSizePixel = 0, Size = size, Parent = parent,
+        BackgroundColor3 = Theme.BorderAccent, BorderSizePixel = 0, Size = size, Parent = parent,
     })
     if isButton then outer.Text = ""; outer.AutoButtonColor = false end
     Corner(outer, 10)
-
     local f = Create(isButton and "TextButton" or "Frame", {
-        BackgroundColor3 = bg or Theme.Card,
-        BorderSizePixel = 0,
+        BackgroundColor3 = bg or Theme.Card, BorderSizePixel = 0,
         Position = UDim2.fromOffset(1, 1),
-        Size = UDim2.new(1, -2, 1, -2),
-        Parent = outer,
+        Size = UDim2.new(1, -2, 1, -2), Parent = outer,
     })
     if isButton then f.Text = ""; f.AutoButtonColor = false end
     Corner(f, 9)
-
     f.Outer = outer
     return f
 end
 
 local function CardText(card, title, desc, titleSize, descScale)
     Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(14, 10),
-        Size = UDim2.new(1, -28, 0, 20),
-        Font = Theme.FontBold, Text = title,
-        TextColor3 = Theme.Text, TextSize = titleSize or 15,
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 10),
+        Size = UDim2.new(1, -28, 0, 20), Font = Theme.FontBold,
+        Text = title, TextColor3 = Theme.Text, TextSize = titleSize or 15,
         TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2, Parent = card,
     })
     if desc then
         Create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(14, 31),
-            Size = UDim2.new(descScale or 1, -28, 0, 28),
-            Font = Theme.Font, Text = desc,
-            TextColor3 = Theme.SubText, TextSize = 11,
+            BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 31),
+            Size = UDim2.new(descScale or 1, -28, 0, 28), Font = Theme.Font,
+            Text = desc, TextColor3 = Theme.SubText, TextSize = 11,
             TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
             TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2, Parent = card,
         })
@@ -538,28 +467,24 @@ end
 
 local function TileRow(parent, order, hScale, hOffset)
     local r = Create("Frame", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, hScale, hOffset),
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, hScale, hOffset),
         LayoutOrder = order, Parent = parent,
     })
     Create("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6), Parent = r,
+        SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = r,
     })
     return r
 end
 
 local function StatTile(row, order, title, value, wScale, onClick)
     local btn = Create("TextButton", {
-        BackgroundColor3 = Color3.fromRGB(22, 20, 25),
-        BackgroundTransparency = 0.15, BorderSizePixel = 0,
-        Size = UDim2.new(wScale, -3, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(24, 21, 23), BackgroundTransparency = 0.15,
+        BorderSizePixel = 0, Size = UDim2.new(wScale, -3, 1, 0),
         LayoutOrder = order, Text = "", AutoButtonColor = false, Parent = row,
     })
     Corner(btn, 8)
     local strk = Stroke(btn, Theme.Border, 1)
-
     local holder = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = btn })
     Create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
@@ -567,27 +492,22 @@ local function StatTile(row, order, title, value, wScale, onClick)
         Padding = UDim.new(0, 1), Parent = holder,
     })
     Create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 6), Parent = holder })
-
     Create("TextLabel", {
-        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 15),
-        LayoutOrder = 1, Font = Theme.FontBold, Text = title,
-        TextColor3 = Theme.Text, TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = holder,
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 15), LayoutOrder = 1,
+        Font = Theme.FontBold, Text = title, TextColor3 = Theme.Text,
+        TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = holder,
     })
     local valueLabel = Create("TextLabel", {
-        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 12),
-        LayoutOrder = 2, Font = Theme.Font, Text = value,
-        TextColor3 = Theme.SubText, TextSize = 10,
-        TextTruncate = Enum.TextTruncate.AtEnd,
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 12), LayoutOrder = 2,
+        Font = Theme.Font, Text = value, TextColor3 = Theme.SubText,
+        TextSize = 10, TextTruncate = Enum.TextTruncate.AtEnd,
         TextXAlignment = Enum.TextXAlignment.Left, Parent = holder,
     })
-
     if onClick then
         btn.MouseEnter:Connect(function() Tween(strk, 0.15, { Color = Theme.Accent }) end)
         btn.MouseLeave:Connect(function() Tween(strk, 0.15, { Color = Theme.Border }) end)
         btn.MouseButton1Click:Connect(function() task.spawn(onClick) end)
     end
-
     return { Button = btn, Set = function(text) valueLabel.Text = text end }
 end
 
@@ -599,21 +519,16 @@ local function JoinDiscord(invite)
         pcall(req, {
             Url = "http://127.0.0.1:6463/rpc?v=1", Method = "POST",
             Headers = { ["Content-Type"] = "application/json", ["Origin"] = "https://discord.com" },
-            Body = HttpService:JSONEncode({
-                cmd = "INVITE_BROWSER", args = { code = code }, nonce = HttpService:GenerateGUID(false),
-            }),
+            Body = HttpService:JSONEncode({ cmd = "INVITE_BROWSER", args = { code = code }, nonce = HttpService:GenerateGUID(false) }),
         })
     end
-    VexUI:Notify({ Title = "Discord", Description = "Invite copied: discord.gg/" .. code, Icon = "circle-check" })
+    VexUI:Notify({ Title = "Discord", Description = "Invite copied", Icon = "circle-check" })
 end
 
 local function GetPing()
-    local ok, v = pcall(function()
-        return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-    end)
+    local ok, v = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
     return ok and v or nil
 end
-
 local function GetExecutorName()
     local ok, name = pcall(function() return identifyexecutor() end)
     return (ok and name) or "Unknown executor"
@@ -627,7 +542,7 @@ function VexUI:CreateWindow(opts)
     local size = opts.Size or UDim2.fromOffset(700, 430)
     local gui = EnsureGui()
 
-    -- Outer = red border
+    -- WINDOW uses same outer/inner technique
     local outer = Create("Frame", {
         Name = "Outer", AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5), Size = size,
@@ -636,8 +551,7 @@ function VexUI:CreateWindow(opts)
     Corner(outer, 13)
 
     local main = Create("Frame", {
-        Name = "Main", BackgroundColor3 = Theme.Background,
-        BorderSizePixel = 0,
+        Name = "Main", BackgroundColor3 = Theme.Background, BorderSizePixel = 0,
         Position = UDim2.fromOffset(1, 1),
         Size = UDim2.new(1, -2, 1, -2),
         ClipsDescendants = true, Parent = outer,
@@ -659,15 +573,13 @@ function VexUI:CreateWindow(opts)
     logo.Instance.Position = UDim2.new(0, 16, 0.5, -11)
 
     local titleHolder = Create("Frame", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 48, 0, 0),
+        BackgroundTransparency = 1, Position = UDim2.new(0, 48, 0, 0),
         Size = UDim2.new(1, -170, 1, 0), Parent = topBar,
     })
     Create("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         VerticalAlignment = Enum.VerticalAlignment.Center,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 8), Parent = titleHolder,
+        SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8), Parent = titleHolder,
     })
     Create("TextLabel", {
         BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X,
@@ -683,18 +595,15 @@ function VexUI:CreateWindow(opts)
     })
 
     local btnHolder = Create("Frame", {
-        BackgroundTransparency = 1,
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -12, 0.5, 0),
-        Size = UDim2.new(0, 0, 0, 28),
+        BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.new(0, 0, 0, 28),
         AutomaticSize = Enum.AutomaticSize.X, Parent = topBar,
     })
     Create("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         HorizontalAlignment = Enum.HorizontalAlignment.Right,
         VerticalAlignment = Enum.VerticalAlignment.Center,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6), Parent = btnHolder,
+        SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = btnHolder,
     })
 
     local function TopButton(order, icon, fallback)
@@ -708,14 +617,8 @@ function VexUI:CreateWindow(opts)
         local ic = NewIcon(b, icon, 14, Theme.SubText, fallback)
         ic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
         ic.Instance.Position = UDim2.fromScale(0.5, 0.5)
-        b.MouseEnter:Connect(function()
-            TintIcon(ic, Theme.Text)
-            Tween(s, 0.15, { Color = Theme.Accent })
-        end)
-        b.MouseLeave:Connect(function()
-            TintIcon(ic, Theme.SubText)
-            Tween(s, 0.15, { Color = Theme.Border })
-        end)
+        b.MouseEnter:Connect(function() TintIcon(ic, Theme.Text); Tween(s, 0.15, { Color = Theme.Accent }) end)
+        b.MouseLeave:Connect(function() TintIcon(ic, Theme.SubText); Tween(s, 0.15, { Color = Theme.Border }) end)
         return b
     end
 
@@ -724,8 +627,7 @@ function VexUI:CreateWindow(opts)
 
     local body = Create("Frame", {
         Name = "Body", BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 46),
-        Size = UDim2.new(1, 0, 1, -46), Parent = main,
+        Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 1, -46), Parent = main,
     })
 
     local sidebar = Create("Frame", {
@@ -734,8 +636,7 @@ function VexUI:CreateWindow(opts)
     })
     Create("Frame", {
         BackgroundColor3 = Theme.BorderLight, BorderSizePixel = 0,
-        Position = UDim2.new(1, -1, 0, 0),
-        Size = UDim2.new(0, 1, 1, 0), Parent = sidebar,
+        Position = UDim2.new(1, -1, 0, 0), Size = UDim2.new(0, 1, 1, 0), Parent = sidebar,
     })
 
     local tabList = Create("Frame", {
@@ -751,16 +652,14 @@ function VexUI:CreateWindow(opts)
 
     local content = Create("Frame", {
         Name = "Content", BackgroundTransparency = 1,
-        Position = UDim2.new(0, 60, 0, 0),
-        Size = UDim2.new(1, -60, 1, 0), Parent = body,
+        Position = UDim2.new(0, 60, 0, 0), Size = UDim2.new(1, -60, 1, 0), Parent = body,
     })
 
     local avatarBtn = Create("ImageButton", {
-        Name = "Avatar", BackgroundColor3 = Theme.Tertiary,
-        BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1),
-        Position = UDim2.new(0.5, 0, 1, -10),
-        Size = UDim2.fromOffset(42, 42),
-        ScaleType = Enum.ScaleType.Crop, AutoButtonColor = false, Parent = sidebar,
+        Name = "Avatar", BackgroundColor3 = Theme.Tertiary, BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10),
+        Size = UDim2.fromOffset(42, 42), ScaleType = Enum.ScaleType.Crop,
+        AutoButtonColor = false, Parent = sidebar,
     })
     Corner(avatarBtn, 10)
     Stroke(avatarBtn, Theme.BorderAccent, 1)
@@ -788,72 +687,35 @@ function VexUI:CreateWindow(opts)
         Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), updateScale)
     end
 
-    avatarBtn.MouseButton1Click:Connect(function()
-        if windowObj.HomeTab then windowObj:SelectTab(windowObj.HomeTab) end
-    end)
+    avatarBtn.MouseButton1Click:Connect(function() if windowObj.HomeTab then windowObj:SelectTab(windowObj.HomeTab) end end)
     closeBtn.MouseButton1Click:Connect(function() outer.Visible = false end)
     minBtn.MouseButton1Click:Connect(function()
         windowObj.Minimized = not windowObj.Minimized
         if windowObj.Minimized then
             Tween(outer, 0.2, { Size = UDim2.new(size.X.Scale, size.X.Offset, 0, 46) })
-            task.delay(0.2, function()
-                if windowObj.Minimized then body.Visible = false end
-            end)
+            task.delay(0.2, function() if windowObj.Minimized then body.Visible = false end end)
         else
             body.Visible = true
             Tween(outer, 0.2, { Size = size })
         end
     end)
-
     Connect(UserInputService.InputBegan, function(input, gpe)
         if gpe then return end
-        if input.KeyCode == windowObj.ToggleKeybind then
-            outer.Visible = not outer.Visible
-        end
+        if input.KeyCode == windowObj.ToggleKeybind then outer.Visible = not outer.Visible end
     end)
-
-    local wantButton = opts.ToggleButton
-    if wantButton == nil then
-        wantButton = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-    end
-    if wantButton then
-        local fb = Create("TextButton", {
-            Name = "ToggleButton", BackgroundColor3 = Theme.Secondary,
-            Position = UDim2.new(0, 16, 0.5, -22),
-            Size = UDim2.fromOffset(44, 44),
-            Text = "", AutoButtonColor = false, Parent = gui,
-        })
-        Corner(fb, 12)
-        Stroke(fb, Theme.BorderAccent, 1)
-        local fic = NewIcon(fb, opts.Icon or "moon", 22, Theme.Accent, "R")
-        fic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
-        fic.Instance.Position = UDim2.fromScale(0.5, 0.5)
-        local drag = MakeDraggable(fb, fb)
-        fb.MouseButton1Click:Connect(function()
-            if drag.Moved < 6 then outer.Visible = not outer.Visible end
-        end)
-        windowObj.ToggleButton = fb
-    end
 
     return windowObj
 end
 
 function Window:Toggle() self.Outer.Visible = not self.Outer.Visible end
 function Window:Notify(opts) VexUI:Notify(opts) end
-function Window:Destroy()
-    self.Alive = false
-    self.Outer:Destroy()
-    if self.ToggleButton then self.ToggleButton:Destroy() end
-end
 
 function Window:AddTab(name, icon)
     local tab = setmetatable({ Name = name, Window = self, Icon = icon, Groupboxes = {} }, Tab)
-
     local btn = Create("TextButton", {
-        Name = name, BackgroundColor3 = Theme.Tertiary,
-        BackgroundTransparency = 1, BorderSizePixel = 0,
-        Size = UDim2.fromOffset(42, 42), LayoutOrder = #self.Tabs + 1,
-        Text = "", AutoButtonColor = false, Parent = self.TabBar,
+        Name = name, BackgroundColor3 = Theme.Tertiary, BackgroundTransparency = 1,
+        BorderSizePixel = 0, Size = UDim2.fromOffset(42, 42),
+        LayoutOrder = #self.Tabs + 1, Text = "", AutoButtonColor = false, Parent = self.TabBar,
     })
     Corner(btn, 10)
     local strk = Stroke(btn, Theme.BorderAccent, 1)
@@ -865,27 +727,19 @@ function Window:AddTab(name, icon)
 
     local tip = Create("TextLabel", {
         BackgroundColor3 = Theme.Secondary, AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(1, 10, 0.5, 0),
-        AutomaticSize = Enum.AutomaticSize.XY,
-        Size = UDim2.fromOffset(0, 0),
-        Font = Theme.Font, Text = name, TextColor3 = Theme.Text,
-        TextSize = 12, Visible = false, ZIndex = 10, Parent = btn,
+        Position = UDim2.new(1, 10, 0.5, 0), AutomaticSize = Enum.AutomaticSize.XY,
+        Size = UDim2.fromOffset(0, 0), Font = Theme.Font, Text = name,
+        TextColor3 = Theme.Text, TextSize = 12, Visible = false, ZIndex = 10, Parent = btn,
     })
     Corner(tip, 6)
     Stroke(tip, Theme.BorderAccent, 1)
-    Create("UIPadding", {
-        PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
-        PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), Parent = tip,
-    })
+    Create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), Parent = tip })
 
     local frame = Create("Frame", {
         Name = name .. "_Content", BackgroundTransparency = 1,
         Size = UDim2.fromScale(1, 1), Visible = false, Parent = self.Content,
     })
-    Create("UIPadding", {
-        PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10),
-        PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), Parent = frame,
-    })
+    Create("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), Parent = frame })
 
     local function Column(nameStr, pos)
         local col = Create("ScrollingFrame", {
@@ -893,39 +747,26 @@ function Window:AddTab(name, icon)
             Position = pos, Size = UDim2.new(0.5, -5, 1, 0),
             CanvasSize = UDim2.new(0, 0, 0, 0),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
-            ScrollBarThickness = 2,
-            ScrollBarImageColor3 = Theme.BorderAccent,
+            ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.BorderAccent,
             ScrollingDirection = Enum.ScrollingDirection.Y, Parent = frame,
         })
-        Create("UIListLayout", {
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 8), Parent = col,
-        })
+        Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8), Parent = col })
         Create("UIPadding", { PaddingRight = UDim.new(0, 4), Parent = col })
         return col
     end
 
-    tab.Button = btn
-    tab.Frame = frame
+    tab.Button = btn; tab.Frame = frame
     tab.Left = Column("Left", UDim2.new(0, 0, 0, 0))
     tab.Right = Column("Right", UDim2.new(0.5, 5, 0, 0))
-    tab._btn = btn
-    tab._stroke = strk
-    tab._icon = ic
+    tab._btn = btn; tab._stroke = strk; tab._icon = ic
 
     btn.MouseEnter:Connect(function()
         tip.Visible = true
-        if self.ActiveTab ~= tab then
-            Tween(btn, 0.15, { BackgroundTransparency = 0.6 })
-            TintIcon(ic, Theme.Text)
-        end
+        if self.ActiveTab ~= tab then Tween(btn, 0.15, { BackgroundTransparency = 0.6 }); TintIcon(ic, Theme.Text) end
     end)
     btn.MouseLeave:Connect(function()
         tip.Visible = false
-        if self.ActiveTab ~= tab then
-            Tween(btn, 0.15, { BackgroundTransparency = 1 })
-            TintIcon(ic, Theme.SubText)
-        end
+        if self.ActiveTab ~= tab then Tween(btn, 0.15, { BackgroundTransparency = 1 }); TintIcon(ic, Theme.SubText) end
     end)
     btn.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
 
@@ -936,28 +777,29 @@ end
 
 function Window:SelectTab(tab)
     if self.ActiveTab == tab then return end
-    for _, t in ipairs(self.Tabs) do
-        t.Frame.Visible = false
-        t:_SetActive(false)
-    end
+    for _, t in ipairs(self.Tabs) do t.Frame.Visible = false; t:_SetActive(false) end
     self.ActiveTab = tab
     tab.Frame.Visible = true
     tab:_SetActive(true)
+end
+
+function Tab:_SetActive(active)
+    Tween(self._btn, 0.15, { BackgroundTransparency = active and 0 or 1, BackgroundColor3 = active and Theme.Accent or Theme.Tertiary })
+    Tween(self._stroke, 0.15, { Transparency = active and 0.3 or 1, Color = Theme.AccentBright })
+    TintIcon(self._icon, active and Color3.new(1, 1, 1) or Theme.SubText)
 end
 
 -- ============ HOME TAB ============
 function Window:AddHomeTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Home", opts.Icon or "house")
-    tab.Left:Destroy()
-    tab.Right:Destroy()
+    tab.Left:Destroy(); tab.Right:Destroy()
     self.HomeTab = tab
     local page = tab.Frame
 
     local avatarBox = Create("ImageLabel", {
         BackgroundColor3 = Theme.Tertiary, BorderSizePixel = 0,
-        Size = UDim2.fromOffset(64, 64),
-        ScaleType = Enum.ScaleType.Crop, Parent = page,
+        Size = UDim2.fromOffset(64, 64), ScaleType = Enum.ScaleType.Crop, Parent = page,
     })
     Corner(avatarBox, 12)
     Stroke(avatarBox, Theme.BorderAccent, 1)
@@ -966,40 +808,23 @@ function Window:AddHomeTab(opts)
     local header = Card(page, UDim2.new(1, -72, 0, 64), Theme.Card)
     header.Position = UDim2.fromOffset(72, 0)
     local hl = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = header })
-    Create("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        VerticalAlignment = Enum.VerticalAlignment.Center,
-        Padding = UDim.new(0, 2), Parent = hl,
-    })
+    Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 2), Parent = hl })
     Create("UIPadding", { PaddingLeft = UDim.new(0, 16), Parent = hl })
     Create("TextLabel", {
-        BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 22),
-        LayoutOrder = 1, Font = Theme.FontBold,
-        Text = opts.Greeting or ("Hello, " .. LocalPlayer.DisplayName),
-        TextColor3 = Theme.Text, TextSize = 17,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = hl,
+        BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 22), LayoutOrder = 1,
+        Font = Theme.FontBold, Text = opts.Greeting or ("Hello, " .. LocalPlayer.DisplayName),
+        TextColor3 = Theme.Text, TextSize = 17, TextXAlignment = Enum.TextXAlignment.Left, Parent = hl,
     })
     Create("TextLabel", {
-        BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 16),
-        LayoutOrder = 2, Font = Theme.Font,
-        Text = opts.Subtitle or (LocalPlayer.Name .. " - " .. self.Title),
-        TextColor3 = Theme.SubText, TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = hl,
+        BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 16), LayoutOrder = 2,
+        Font = Theme.Font, Text = opts.Subtitle or (LocalPlayer.Name .. " - " .. self.Title),
+        TextColor3 = Theme.SubText, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = hl,
     })
 
-    local cols = Create("Frame", {
-        BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 72),
-        Size = UDim2.new(1, 0, 1, -72), Parent = page,
-    })
+    local cols = Create("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 72), Size = UDim2.new(1, 0, 1, -72), Parent = page })
     local function ColumnFrame(pos)
-        local c = Create("Frame", {
-            BackgroundTransparency = 1, Position = pos,
-            Size = UDim2.new(0.5, -4, 1, 0), Parent = cols,
-        })
-        Create("UIListLayout", {
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 8), Parent = c,
-        })
+        local c = Create("Frame", { BackgroundTransparency = 1, Position = pos, Size = UDim2.new(0.5, -4, 1, 0), Parent = cols })
+        Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8), Parent = c })
         return c
     end
     local left = ColumnFrame(UDim2.new(0, 0, 0, 0))
@@ -1011,22 +836,13 @@ function Window:AddHomeTab(opts)
     Glow(server, Theme.Success, -45, 0.25)
     CardText(server, "Server", "Information on the session you're currently in")
 
-    local grid = Create("Frame", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 12, 0, 52),
-        Size = UDim2.new(1, -24, 1, -62),
-        ZIndex = 2, Parent = server,
-    })
+    local grid = Create("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 52), Size = UDim2.new(1, -24, 1, -62), ZIndex = 2, Parent = server })
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = grid })
 
     local function joinScript()
         local code = string.format('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game:GetService("Players").LocalPlayer)', game.PlaceId, game.JobId)
         local ok = Copy(code)
-        VexUI:Notify({
-            Title = ok and "Copied" or "Copy failed",
-            Description = ok and "Join script copied to clipboard" or "Your executor has no clipboard function",
-            Icon = ok and "copy" or "triangle-alert",
-        })
+        VexUI:Notify({ Title = ok and "Copied" or "Copy failed", Description = ok and "Join script copied" or "No clipboard", Icon = ok and "copy" or "triangle-alert" })
     end
 
     local r1 = TileRow(grid, 1, 1/3, -4)
@@ -1042,76 +858,36 @@ function Window:AddHomeTab(opts)
     if hasDiscord then
         local dc = Card(left, UDim2.new(1, 0, 0.28, -4), Color3.new(1, 1, 1), "TextButton")
         dc.LayoutOrder = 2
-        Gradient(dc, {
-            { 0, Color3.fromRGB(88, 101, 242) },
-            { 0.55, Color3.fromRGB(52, 32, 112) },
-            { 1, Color3.fromRGB(14, 12, 24) },
-        }, 8)
+        Gradient(dc, { { 0, Color3.fromRGB(88, 101, 242) }, { 0.55, Color3.fromRGB(52, 32, 112) }, { 1, Color3.fromRGB(14, 12, 24) } }, 8)
         local dl = Create("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = dc })
-        Create("UIListLayout", {
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            VerticalAlignment = Enum.VerticalAlignment.Center, Parent = dl,
-        })
+        Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center, Parent = dl })
         Create("UIPadding", { PaddingLeft = UDim.new(0, 14), Parent = dl })
-        Create("TextLabel", {
-            BackgroundTransparency = 1, Size = UDim2.new(1, -14, 0, 24),
-            LayoutOrder = 1, Font = Theme.FontBold, Text = "Discord",
-            TextColor3 = Color3.new(1, 1, 1), TextSize = 19,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = dl,
-        })
-        Create("TextLabel", {
-            BackgroundTransparency = 1, Size = UDim2.new(1, -14, 0, 16),
-            LayoutOrder = 2, Font = Theme.Font,
-            Text = "Tap to join the Discord Server",
-            TextColor3 = Color3.fromRGB(215, 218, 255), TextSize = 12,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = dl,
-        })
+        Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -14, 0, 24), LayoutOrder = 1, Font = Theme.FontBold, Text = "Discord", TextColor3 = Color3.new(1, 1, 1), TextSize = 19, TextXAlignment = Enum.TextXAlignment.Left, Parent = dl })
+        Create("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, -14, 0, 16), LayoutOrder = 2, Font = Theme.Font, Text = "Tap to join the Discord Server", TextColor3 = Color3.fromRGB(215, 218, 255), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, Parent = dl })
         dc.MouseButton1Click:Connect(function() task.spawn(JoinDiscord, opts.Discord) end)
     end
 
     local required = opts.RequiredFunctions or { "loadstring" }
     local supported = true
     local env = (getgenv and getgenv()) or _G
-    for _, fn in ipairs(required) do
-        if env[fn] == nil then supported = false; break end
-    end
+    for _, fn in ipairs(required) do if env[fn] == nil then supported = false; break end end
 
     local exec = Card(right, UDim2.new(1, 0, 0.3, -4), Color3.new(1, 1, 1))
     exec.LayoutOrder = 1
     if supported then
-        Gradient(exec, {
-            { 0, Color3.fromRGB(220, 40, 55) },
-            { 0.6, Color3.fromRGB(70, 20, 28) },
-            { 1, Color3.fromRGB(16, 9, 12) },
-        }, 20)
+        Gradient(exec, { { 0, Color3.fromRGB(220, 40, 55) }, { 0.6, Color3.fromRGB(70, 20, 28) }, { 1, Color3.fromRGB(16, 9, 12) } }, 20)
     else
-        Gradient(exec, {
-            { 0, Color3.fromRGB(150, 110, 30) },
-            { 0.6, Color3.fromRGB(58, 44, 16) },
-            { 1, Color3.fromRGB(16, 12, 8) },
-        }, 20)
+        Gradient(exec, { { 0, Color3.fromRGB(150, 110, 30) }, { 0.6, Color3.fromRGB(58, 44, 16) }, { 1, Color3.fromRGB(16, 12, 8) } }, 20)
     end
     CardText(exec, GetExecutorName(), nil, 17)
-    Create("TextLabel", {
-        BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 32),
-        Size = UDim2.new(1, -28, 1, -40),
-        Font = Theme.Font,
-        Text = supported and "Your executor seems to support this script." or "Your executor might not support all features.",
-        TextColor3 = Color3.fromRGB(230, 225, 230), TextSize = 12,
-        TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2, Parent = exec,
-    })
+    Create("TextLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 32), Size = UDim2.new(1, -28, 1, -40), Font = Theme.Font, Text = supported and "Your executor seems to support this script." or "Your executor might not support all features.", TextColor3 = Color3.fromRGB(230, 225, 230), TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2, Parent = exec })
 
     local friends = Card(right, UDim2.new(1, 0, 0.7, -4), Theme.Card)
     friends.LayoutOrder = 2
     Glow(friends, Theme.Warning, -135, 0.2)
     CardText(friends, "Friends", "Find out what your friends are currently doing", 17, 0.62)
 
-    local fgrid = Create("Frame", {
-        BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 12, 1, -12),
-        Size = UDim2.new(1, -24, 0, 106), ZIndex = 2, Parent = friends,
-    })
+    local fgrid = Create("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -12), Size = UDim2.new(1, -24, 0, 106), ZIndex = 2, Parent = friends })
     Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = fgrid })
     local fr1 = TileRow(fgrid, 1, 0.5, -3)
     local tInServer = StatTile(fr1, 1, "In Server", "-", 0.5)
@@ -1173,10 +949,7 @@ function Window:AddHomeTab(opts)
         end
     end)
 
-    tab.Refresh = function()
-        pcall(refreshLive)
-        refreshFriends()
-    end
+    tab.Refresh = function() pcall(refreshLive); refreshFriends() end
     return tab
 end
 
@@ -1184,101 +957,68 @@ end
 function Window:AddSettingsTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Settings", opts.Icon or "settings")
-
     local menu = tab:AddLeftGroupbox("Menu", "layout-dashboard")
-    local keybind = menu:AddKeyPicker("VexUI_MenuKey", {
-        Text = "Menu keybind", Default = self.ToggleKeybind.Name,
-    })
+    local keybind = menu:AddKeyPicker("VexUI_MenuKey", { Text = "Menu keybind", Default = self.ToggleKeybind.Name })
     keybind:OnChanged(function(keyName)
         local ok, key = pcall(function() return Enum.KeyCode[keyName] end)
         if ok and key then self.ToggleKeybind = key end
     end)
-    menu:AddButton("Unload UI", {
-        Icon = "power",
-        Callback = function() VexUI:Unload() end,
-    })
+    menu:AddButton("Unload UI", { Icon = "power", Callback = function() VexUI:Unload() end })
 
     local cfg = tab:AddRightGroupbox("Config", "save")
     local nameBox = cfg:AddTextbox("VexUI_ConfigName", { Text = "Config name", Placeholder = "default" })
     local list = cfg:AddDropdown("VexUI_ConfigList", { Text = "Configs", Values = VexUI:ListConfigs() })
-
-    local function currentName()
-        local n = nameBox.Get()
-        if n == "" then n = list.Get() end
-        return n
-    end
-
-    cfg:AddButton("Save config", {
-        Icon = "save",
-        Callback = function()
-            local n = currentName()
-            local ok, err = VexUI:SaveConfig(n)
-            VexUI:Notify({
-                Title = ok and "Config saved" or "Save failed",
-                Description = ok and n or tostring(err),
-                Icon = ok and "circle-check" or "triangle-alert",
-            })
-            list.Refresh(VexUI:ListConfigs())
-        end,
-    })
-    cfg:AddButton("Load config", {
-        Icon = "folder",
-        Callback = function()
-            local n = currentName()
-            local ok, err = VexUI:LoadConfig(n)
-            VexUI:Notify({
-                Title = ok and "Config loaded" or "Load failed",
-                Description = ok and n or tostring(err),
-                Icon = ok and "circle-check" or "triangle-alert",
-            })
-        end,
-    })
-    cfg:AddButton("Refresh list", {
-        Icon = "refresh-cw",
-        Callback = function() list.Refresh(VexUI:ListConfigs()) end,
-    })
-
+    local function currentName() local n = nameBox.Get(); if n == "" then n = list.Get() end; return n end
+    cfg:AddButton("Save config", { Icon = "save", Callback = function()
+        local n = currentName()
+        local ok, err = VexUI:SaveConfig(n)
+        VexUI:Notify({ Title = ok and "Config saved" or "Save failed", Description = ok and n or tostring(err), Icon = ok and "circle-check" or "triangle-alert" })
+        list.Refresh(VexUI:ListConfigs())
+    end })
+    cfg:AddButton("Load config", { Icon = "folder", Callback = function()
+        local n = currentName()
+        local ok, err = VexUI:LoadConfig(n)
+        VexUI:Notify({ Title = ok and "Config loaded" or "Load failed", Description = ok and n or tostring(err), Icon = ok and "circle-check" or "triangle-alert" })
+    end })
+    cfg:AddButton("Refresh list", { Icon = "refresh-cw", Callback = function() list.Refresh(VexUI:ListConfigs()) end })
     return tab
 end
 
--- ============ TAB ============
-function Tab:_SetActive(active)
-    Tween(self._btn, 0.15, { BackgroundTransparency = active and 0 or 1, BackgroundColor3 = active and Theme.Accent or Theme.Tertiary })
-    Tween(self._stroke, 0.15, { Transparency = active and 0.3 or 1, Color = Theme.AccentBright })
-    TintIcon(self._icon, active and Color3.new(1, 1, 1) or Theme.SubText)
-end
+-- ============ TAB GROUPBOX METHODS ============
+function Tab:AddLeftGroupbox(name, icon) return self:_AddGroupbox(name, icon, self.Left) end
+function Tab:AddRightGroupbox(name, icon) return self:_AddGroupbox(name, icon, self.Right) end
 
-function Tab:AddLeftGroupbox(name, icon)
-    return self:_AddGroupbox(name, icon, self.Left)
-end
-
-function Tab:AddRightGroupbox(name, icon)
-    return self:_AddGroupbox(name, icon, self.Right)
-end
-
--- Groupbox uses DOUBLE FRAME border technique = no stroke bugs ever
+-- *** THE FIX: outer frame with UIListLayout + UIPadding of 1px acts as BORDER ***
 function Tab:_AddGroupbox(name, icon, column)
     local box = setmetatable({ Name = name, Tab = self, Column = column, _n = 0 }, Groupbox)
 
     -- OUTER = red border color
+    -- has UIListLayout + UIPadding(1px) so it auto-sizes around inner
     local outer = Create("Frame", {
         Name = name .. "_Outer",
         BackgroundColor3 = Theme.BorderAccent,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 42),
+        Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         LayoutOrder = #self.Groupboxes + 1,
         Parent = column,
     })
     Corner(outer, 8)
+    Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = outer })
+    Create("UIPadding", {
+        PaddingTop = UDim.new(0, 1),
+        PaddingBottom = UDim.new(0, 1),
+        PaddingLeft = UDim.new(0, 1),
+        PaddingRight = UDim.new(0, 1),
+        Parent = outer,
+    })
 
-    -- INNER = actual content with 1px offset
+    -- INNER = actual content, auto-sizes based on its own children
     local frame = Create("Frame", {
         Name = name,
         BackgroundColor3 = Theme.Secondary,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(1, 1),
-        Size = UDim2.new(1, -2, 1, -2),
+        Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = outer,
     })
@@ -1307,8 +1047,7 @@ function Tab:_AddGroupbox(name, icon, column)
     })
     Create("Frame", {
         BackgroundColor3 = Theme.Border, BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 1),
-        LayoutOrder = 2, Parent = frame,
+        Size = UDim2.new(1, 0, 0, 1), LayoutOrder = 2, Parent = frame,
     })
 
     local container = Create("Frame", {
@@ -1317,10 +1056,7 @@ function Tab:_AddGroupbox(name, icon, column)
         AutomaticSize = Enum.AutomaticSize.Y,
         LayoutOrder = 3, Parent = frame,
     })
-    Create("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 6), Parent = container,
-    })
+    Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6), Parent = container })
     Create("UIPadding", {
         PaddingTop = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10),
         PaddingRight = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), Parent = container,
@@ -1334,12 +1070,12 @@ function Tab:_AddGroupbox(name, icon, column)
     return box
 end
 
--- ============ GROUPBOX ============
-local function Add(self, className, props)
+-- ============ GROUPBOX ELEMENTS ============
+local function Add(self, class, props)
     self._n = self._n + 1
     props.LayoutOrder = self._n
     props.Parent = self.Container
-    return Create(className, props)
+    return Create(class, props)
 end
 
 local function AddRow(self, height, clip)
@@ -1365,11 +1101,7 @@ local function RowLabel(row, text, rightInset)
 end
 
 local function HitButton(row, height)
-    return Create("TextButton", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, height or 34),
-        Text = "", Parent = row,
-    })
+    return Create("TextButton", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, height or 34), Text = "", Parent = row })
 end
 
 function Groupbox:AddDivider()
@@ -1382,10 +1114,9 @@ end
 function Groupbox:AddLabel(text)
     return Add(self, "TextLabel", {
         BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Font = Theme.Font, Text = text, TextColor3 = Theme.Text,
-        TextSize = 13, TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
+        AutomaticSize = Enum.AutomaticSize.Y, Font = Theme.Font,
+        Text = text, TextColor3 = Theme.Text, TextSize = 13,
+        TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
     })
 end
 
@@ -1396,9 +1127,8 @@ function Groupbox:AddButton(name, opts)
 
     local btn = Add(self, "TextButton", {
         BackgroundColor3 = Theme.Tertiary, BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 34),
-        Font = Theme.Font, Text = name, TextColor3 = Theme.Text,
-        TextSize = 13, AutoButtonColor = false,
+        Size = UDim2.new(1, 0, 0, 34), Font = Theme.Font,
+        Text = name, TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false,
     })
     Corner(btn, 6)
     local strk = Stroke(btn, Theme.Border, 1)
@@ -1408,14 +1138,8 @@ function Groupbox:AddButton(name, opts)
         ic.Instance.Position = UDim2.new(0, 12, 0.5, -8)
     end
 
-    btn.MouseEnter:Connect(function()
-        Tween(btn, 0.15, { BackgroundColor3 = Theme.Accent })
-        Tween(strk, 0.15, { Color = Theme.AccentBright })
-    end)
-    btn.MouseLeave:Connect(function()
-        Tween(btn, 0.15, { BackgroundColor3 = Theme.Tertiary })
-        Tween(strk, 0.15, { Color = Theme.Border })
-    end)
+    btn.MouseEnter:Connect(function() Tween(btn, 0.15, { BackgroundColor3 = Theme.Accent }); Tween(strk, 0.15, { Color = Theme.AccentBright }) end)
+    btn.MouseLeave:Connect(function() Tween(btn, 0.15, { BackgroundColor3 = Theme.Tertiary }); Tween(strk, 0.15, { Color = Theme.Border }) end)
     btn.MouseButton1Click:Connect(function() task.spawn(callback) end)
     return btn
 end
@@ -1431,14 +1155,12 @@ function Groupbox:AddToggle(id, opts)
 
     local track = Create("Frame", {
         BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff,
-        BorderSizePixel = 0,
-        Position = UDim2.new(1, -46, 0.5, -10),
+        BorderSizePixel = 0, Position = UDim2.new(1, -46, 0.5, -10),
         Size = UDim2.fromOffset(36, 20), Parent = row,
     })
     Corner(track, 10)
     local thumb = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0,
         Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
         Size = UDim2.fromOffset(16, 16), Parent = track,
     })
@@ -1447,17 +1169,13 @@ function Groupbox:AddToggle(id, opts)
     local function setState(v)
         state = v and true or false
         Tween(track, 0.15, { BackgroundColor3 = state and Theme.ToggleOn or Theme.ToggleOff })
-        Tween(thumb, 0.15, {
-            Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
-        })
-        changed(state)
-        task.spawn(callback, state)
+        Tween(thumb, 0.15, { Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8) })
+        changed(state); task.spawn(callback, state)
     end
 
     HitButton(row, 34).MouseButton1Click:Connect(function() setState(not state) end)
 
-    obj.Container = row
-    obj.Set = setState
+    obj.Container = row; obj.Set = setState
     obj.Get = function() return state end
     function obj:SetValue(v) setState(v) end
     return obj
@@ -1475,47 +1193,17 @@ function Groupbox:AddSlider(id, opts)
     local obj, changed = NewOption("Slider", id, value)
 
     local row = AddRow(self, 46)
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 12, 0, 4),
-        Size = UDim2.new(1, -80, 0, 18),
-        Font = Theme.Font, Text = opts.Text or id,
-        TextColor3 = Theme.Text, TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
-    })
-    local valueLabel = Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -62, 0, 4),
-        Size = UDim2.new(0, 50, 0, 18),
-        Font = Theme.FontBold, Text = tostring(value) .. suffix,
-        TextColor3 = Theme.Accent, TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Right, Parent = row,
-    })
+    Create("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 4), Size = UDim2.new(1, -80, 0, 18), Font = Theme.Font, Text = opts.Text or id, TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
+    local valueLabel = Create("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(1, -62, 0, 4), Size = UDim2.new(0, 50, 0, 18), Font = Theme.FontBold, Text = tostring(value) .. suffix, TextColor3 = Theme.Accent, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Right, Parent = row })
 
-    local barBg = Create("Frame", {
-        BackgroundColor3 = Theme.ToggleOff, BorderSizePixel = 0,
-        Position = UDim2.new(0, 12, 0, 30),
-        Size = UDim2.new(1, -24, 0, 6), Parent = row,
-    })
+    local barBg = Create("Frame", { BackgroundColor3 = Theme.ToggleOff, BorderSizePixel = 0, Position = UDim2.new(0, 12, 0, 30), Size = UDim2.new(1, -24, 0, 6), Parent = row })
     Corner(barBg, 3)
-    local fill = Create("Frame", {
-        BackgroundColor3 = Theme.Accent, BorderSizePixel = 0,
-        Size = UDim2.new((value - min) / range, 0, 1, 0), Parent = barBg,
-    })
+    local fill = Create("Frame", { BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, Size = UDim2.new((value - min) / range, 0, 1, 0), Parent = barBg })
     Corner(fill, 3)
-    local thumb = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new((value - min) / range, 0, 0.5, 0),
-        Size = UDim2.fromOffset(12, 12), ZIndex = 2, Parent = barBg,
-    })
+    local thumb = Create("Frame", { BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new((value - min) / range, 0, 0.5, 0), Size = UDim2.fromOffset(12, 12), ZIndex = 2, Parent = barBg })
     Corner(thumb, 6)
 
-    local hit = Create("TextButton", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 22),
-        Size = UDim2.new(1, 0, 0, 24), Text = "", Parent = row,
-    })
+    local hit = Create("TextButton", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 24), Text = "", Parent = row })
 
     local function render(v, time)
         local rel = (v - min) / range
@@ -1526,9 +1214,7 @@ function Groupbox:AddSlider(id, opts)
 
     local function setValue(v, time)
         value = math.clamp(Round(v, rounding), min, max)
-        render(value, time or 0.05)
-        changed(value)
-        task.spawn(callback, value)
+        render(value, time or 0.05); changed(value); task.spawn(callback, value)
     end
 
     TrackDrag(hit, self.Column, function(pos)
@@ -1553,33 +1239,19 @@ function Groupbox:AddDropdown(id, opts)
     local row = AddRow(self, 34, true)
     RowLabel(row, opts.Text or id, 130)
 
-    local currentLabel = Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(1, -130, 0, 0),
-        Size = UDim2.new(0, 104, 0, 34),
-        Font = Theme.Font, Text = tostring(current),
-        TextColor3 = Theme.Accent, TextSize = 12,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        TextXAlignment = Enum.TextXAlignment.Right, Parent = row,
-    })
+    local currentLabel = Create("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(1, -130, 0, 0), Size = UDim2.new(0, 104, 0, 34), Font = Theme.Font, Text = tostring(current), TextColor3 = Theme.Accent, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Right, Parent = row })
     local arrow = NewIcon(row, "chevron-down", 14, Theme.SubText, "v")
     arrow.Instance.Position = UDim2.new(1, -22, 0, 10)
-
     local hit = HitButton(row, 34)
 
     local list = Create("ScrollingFrame", {
         BackgroundTransparency = 1, BorderSizePixel = 0,
-        Position = UDim2.new(0, 6, 0, 38),
-        Size = UDim2.new(1, -12, 0, 0),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Position = UDim2.new(0, 6, 0, 38), Size = UDim2.new(1, -12, 0, 0),
+        CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollBarThickness = 2, ScrollBarImageColor3 = Theme.BorderAccent,
         Visible = false, Parent = row,
     })
-    Create("UIListLayout", {
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 2), Parent = list,
-    })
+    Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = list })
 
     local buttons = {}
     local function listHeight() return math.min(#values * 26, 130) end
@@ -1595,20 +1267,16 @@ function Groupbox:AddDropdown(id, opts)
             Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, 34) })
             Tween(list, 0.18, { Size = UDim2.new(1, -12, 0, 0) })
             Tween(arrow.Instance, 0.18, { Rotation = 0 })
-            task.delay(0.18, function()
-                if not open then list.Visible = false end
-            end)
+            task.delay(0.18, function() if not open then list.Visible = false end end)
         end
     end
 
     local function select(val)
-        current = val
-        currentLabel.Text = tostring(val)
+        current = val; currentLabel.Text = tostring(val)
         for _, b in ipairs(buttons) do
             b.TextColor3 = (b.Text == tostring(current)) and Theme.Accent or Theme.Text
         end
-        changed(val)
-        task.spawn(callback, val)
+        changed(val); task.spawn(callback, val)
     end
 
     local function refresh()
@@ -1618,8 +1286,7 @@ function Groupbox:AddDropdown(id, opts)
             local option = Create("TextButton", {
                 BackgroundColor3 = Theme.Accent, BackgroundTransparency = 1,
                 BorderSizePixel = 0, Size = UDim2.new(1, -4, 0, 24),
-                LayoutOrder = i, Font = Theme.Font,
-                Text = tostring(val),
+                LayoutOrder = i, Font = Theme.Font, Text = tostring(val),
                 TextColor3 = (tostring(val) == tostring(current)) and Theme.Accent or Theme.Text,
                 TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
                 AutoButtonColor = false, Parent = list,
@@ -1628,10 +1295,7 @@ function Groupbox:AddDropdown(id, opts)
             Corner(option, 4)
             option.MouseEnter:Connect(function() Tween(option, 0.1, { BackgroundTransparency = 0.7 }) end)
             option.MouseLeave:Connect(function() Tween(option, 0.1, { BackgroundTransparency = 1 }) end)
-            option.MouseButton1Click:Connect(function()
-                select(val)
-                setOpen(false)
-            end)
+            option.MouseButton1Click:Connect(function() select(val); setOpen(false) end)
             table.insert(buttons, option)
         end
     end
@@ -1642,11 +1306,7 @@ function Groupbox:AddDropdown(id, opts)
     obj.Container = row
     obj.Set = function(v) select(v) end
     obj.Get = function() return current end
-    obj.Refresh = function(newValues)
-        values = newValues
-        refresh()
-        if open then setOpen(true) end
-    end
+    obj.Refresh = function(newValues) values = newValues; refresh(); if open then setOpen(true) end end
     function obj:SetValue(v) select(v) end
     return obj
 end
@@ -1657,37 +1317,19 @@ function Groupbox:AddTextbox(id, opts)
     local obj, changed = NewOption("Textbox", id, opts.Default or "")
 
     local row = AddRow(self, 42)
-    Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 12, 0, 5),
-        Size = UDim2.new(1, -24, 0, 14),
-        Font = Theme.Font, Text = opts.Text or id,
-        TextColor3 = Theme.SubText, TextSize = 11,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
-    })
+    Create("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 5), Size = UDim2.new(1, -24, 0, 14), Font = Theme.Font, Text = opts.Text or id, TextColor3 = Theme.SubText, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, Parent = row })
     local box = Create("TextBox", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 12, 0, 21),
-        Size = UDim2.new(1, -24, 0, 16),
-        Font = Theme.Font, Text = opts.Default or "",
-        PlaceholderText = opts.Placeholder or "",
+        BackgroundTransparency = 1, Position = UDim2.new(0, 12, 0, 21),
+        Size = UDim2.new(1, -24, 0, 16), Font = Theme.Font,
+        Text = opts.Default or "", PlaceholderText = opts.Placeholder or "",
         TextColor3 = Theme.Text, PlaceholderColor3 = Theme.SubText,
         TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false, Parent = row,
     })
+    box.FocusLost:Connect(function() changed(box.Text); task.spawn(callback, box.Text) end)
 
-    box.FocusLost:Connect(function()
-        changed(box.Text)
-        task.spawn(callback, box.Text)
-    end)
-
-    obj.Instance = box
-    obj.Container = row
-    obj.Set = function(t)
-        box.Text = tostring(t)
-        changed(box.Text)
-        task.spawn(callback, box.Text)
-    end
+    obj.Instance = box; obj.Container = row
+    obj.Set = function(t) box.Text = tostring(t); changed(box.Text); task.spawn(callback, box.Text) end
     obj.Get = function() return box.Text end
     function obj:SetValue(t) obj.Set(t) end
     return obj
@@ -1705,61 +1347,30 @@ function Groupbox:AddColorPicker(id, opts)
     local row = AddRow(self, 34, true)
     RowLabel(row, opts.Text or id, 60)
 
-    local swatch = Create("Frame", {
-        BackgroundColor3 = color, BorderSizePixel = 0,
-        Position = UDim2.new(1, -40, 0, 7),
-        Size = UDim2.fromOffset(28, 20), Parent = row,
-    })
+    local swatch = Create("Frame", { BackgroundColor3 = color, BorderSizePixel = 0, Position = UDim2.new(1, -40, 0, 7), Size = UDim2.fromOffset(28, 20), Parent = row })
     Corner(swatch, 4)
     Stroke(swatch, Theme.BorderLight, 1)
     local hit = HitButton(row, 34)
 
-    local area = Create("Frame", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 0, 40),
-        Size = UDim2.new(1, -20, 0, PICK_H), Parent = row,
-    })
-    local sv = Create("Frame", {
-        BackgroundColor3 = Color3.fromHSV(h, 1, 1),
-        BorderSizePixel = 0, Size = UDim2.new(1, -24, 1, 0), Parent = area,
-    })
+    local area = Create("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 40), Size = UDim2.new(1, -20, 0, PICK_H), Parent = row })
+    local sv = Create("Frame", { BackgroundColor3 = Color3.fromHSV(h, 1, 1), BorderSizePixel = 0, Size = UDim2.new(1, -24, 1, 0), Parent = area })
     Corner(sv, 4)
-    local white = Create("Frame", {
-        BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1), ZIndex = 1, Parent = sv,
-    })
+    local white = Create("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 1, Parent = sv })
     Corner(white, 4)
     Create("UIGradient", { Transparency = NumberSequence.new(0, 1), Parent = white })
-    local black = Create("Frame", {
-        BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = sv,
-    })
+    local black = Create("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 2, Parent = sv })
     Corner(black, 4)
     Create("UIGradient", { Transparency = NumberSequence.new(1, 0), Rotation = 90, Parent = black })
-    local svCursor = Create("Frame", {
-        BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(8, 8),
-        ZIndex = 3, Parent = sv,
-    })
+    local svCursor = Create("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(8, 8), ZIndex = 3, Parent = sv })
     Corner(svCursor, 4)
     Stroke(svCursor, Color3.new(0, 0, 0), 1)
 
-    local hueBar = Create("Frame", {
-        BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
-        Position = UDim2.new(1, -16, 0, 0),
-        Size = UDim2.new(0, 16, 1, 0), Parent = area,
-    })
+    local hueBar = Create("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0, 16, 1, 0), Parent = area })
     Corner(hueBar, 4)
     local hueKeys = {}
-    for i = 0, 6 do
-        table.insert(hueKeys, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(math.min(i / 6, 0.999), 1, 1)))
-    end
+    for i = 0, 6 do table.insert(hueKeys, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(math.min(i / 6, 0.999), 1, 1))) end
     Create("UIGradient", { Color = ColorSequence.new(hueKeys), Rotation = 90, Parent = hueBar })
-    local hueCursor = Create("Frame", {
-        BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Size = UDim2.new(1, 4, 0, 3), ZIndex = 3, Parent = hueBar,
-    })
+    local hueCursor = Create("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(1, 4, 0, 3), ZIndex = 3, Parent = hueBar })
     Stroke(hueCursor, Color3.new(0, 0, 0), 1)
 
     local function render()
@@ -1769,11 +1380,7 @@ function Groupbox:AddColorPicker(id, opts)
         svCursor.Position = UDim2.fromScale(s, 1 - v)
         hueCursor.Position = UDim2.fromScale(0.5, h)
     end
-    local function commit()
-        render()
-        changed(color)
-        task.spawn(callback, color)
-    end
+    local function commit() render(); changed(color); task.spawn(callback, color) end
     render()
 
     TrackDrag(sv, self.Column, function(pos)
@@ -1792,10 +1399,7 @@ function Groupbox:AddColorPicker(id, opts)
     end)
 
     obj.Container = row
-    obj.Set = function(c)
-        h, s, v = Color3.toHSV(c)
-        commit()
-    end
+    obj.Set = function(c) h, s, v = Color3.toHSV(c); commit() end
     obj.Get = function() return color end
     function obj:SetValue(c) obj.Set(c) end
     return obj
@@ -1813,20 +1417,15 @@ function Groupbox:AddKeyPicker(id, opts)
 
     local keyLabel = Create("TextButton", {
         BackgroundColor3 = Theme.Secondary, BorderSizePixel = 0,
-        Position = UDim2.new(1, -70, 0.5, -10),
-        Size = UDim2.fromOffset(58, 20),
-        Font = Theme.FontBold, Text = current,
-        TextColor3 = Theme.Text, TextSize = 11,
-        TextTruncate = Enum.TextTruncate.AtEnd,
+        Position = UDim2.new(1, -70, 0.5, -10), Size = UDim2.fromOffset(58, 20),
+        Font = Theme.FontBold, Text = current, TextColor3 = Theme.Text,
+        TextSize = 11, TextTruncate = Enum.TextTruncate.AtEnd,
         AutoButtonColor = false, Parent = row,
     })
     Corner(keyLabel, 4)
     Stroke(keyLabel, Theme.Border, 1)
 
-    keyLabel.MouseButton1Click:Connect(function()
-        listening = true
-        keyLabel.Text = "..."
-    end)
+    keyLabel.MouseButton1Click:Connect(function() listening = true; keyLabel.Text = "..." end)
 
     Connect(UserInputService.InputBegan, function(input, gpe)
         if gpe then return end
@@ -1845,11 +1444,7 @@ function Groupbox:AddKeyPicker(id, opts)
     end)
 
     obj.Container = row
-    obj.Set = function(k)
-        current = k
-        keyLabel.Text = k
-        changed(k)
-    end
+    obj.Set = function(k) current = k; keyLabel.Text = k; changed(k) end
     obj.Get = function() return current end
     function obj:SetValue(k) obj.Set(k) end
     return obj
