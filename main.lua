@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "tabs-8"
+VexUI.Build = "resize-9"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -1446,6 +1446,131 @@ function VexUI:CreateWindow(opts)
         Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), updateScale)
     end
 
+    -- ============ RESIZE ============
+    -- Rechts, links, unten oder an der Ecke ziehen: die ganze UI skaliert gleichmaessig um die Mitte
+    local resizeLayer
+    if opts.Resizable ~= false then
+        resizeLayer = Create("Frame", {
+            Name = "Resize",
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = 50,
+            Parent = main,
+        })
+
+        local EDGE = mobile and 12 or 8
+        local CORNER = mobile and 30 or 22
+
+        local function applyDrag(mode, pos)
+            local center = main.AbsolutePosition + main.AbsoluteSize / 2
+            local hw, hh = size.X.Offset / 2, size.Y.Offset / 2
+            local dx, dy = math.abs(pos.X - center.X), math.abs(pos.Y - center.Y)
+            local s
+            if mode == "x" then
+                s = dx / hw
+            elseif mode == "y" then
+                s = dy / hh
+            else
+                s = math.sqrt(dx * dx + dy * dy) / math.sqrt(hw * hw + hh * hh)
+            end
+            s = math.clamp(s, 0.4, 2)
+            windowObj.UserScale = s
+            uiScale.Scale = s
+        end
+
+        local function onResizeEnd()
+            local pct = math.floor(uiScale.Scale * 100 + 0.5)
+            windowObj:SetScale(pct / 100, true)
+            if windowObj._scaleSlider then
+                windowObj._scaleSlider.Set(pct)
+            end
+        end
+
+        local function Handle(name, pos, sz, mode, isCorner)
+            local h = Create("TextButton", {
+                Name = name,
+                BackgroundColor3 = Theme.Accent,
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Position = pos,
+                Size = sz,
+                Text = "",
+                AutoButtonColor = false,
+                ZIndex = 50,
+                Parent = resizeLayer,
+            })
+
+            local dots = {}
+            if isCorner then
+                local o = CORNER - 8
+                for _, p in ipairs({ { o, o }, { o, o - 6 }, { o - 6, o } }) do
+                    local d = Create("Frame", {
+                        BackgroundColor3 = Theme.SubText,
+                        BackgroundTransparency = 0.3,
+                        BorderSizePixel = 0,
+                        Position = UDim2.fromOffset(p[1], p[2]),
+                        Size = UDim2.fromOffset(2, 2),
+                        ZIndex = 51,
+                        Parent = h,
+                    })
+                    Corner(d, 1)
+                    table.insert(dots, d)
+                end
+            end
+
+            local function setHot(on)
+                if isCorner then
+                    for _, d in ipairs(dots) do
+                        Tween(d, 0.12, { BackgroundColor3 = on and Theme.Accent or Theme.SubText })
+                    end
+                else
+                    Tween(h, 0.12, { BackgroundTransparency = on and 0.5 or 1 })
+                end
+            end
+
+            local dragging = false
+            h.MouseEnter:Connect(function()
+                if not dragging then
+                    setHot(true)
+                end
+            end)
+            h.MouseLeave:Connect(function()
+                if not dragging then
+                    setHot(false)
+                end
+            end)
+            h.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    setHot(true)
+                end
+            end)
+            Connect(UserInputService.InputChanged, function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                    or input.UserInputType == Enum.UserInputType.Touch) then
+                    applyDrag(mode, input.Position)
+                end
+            end)
+            Connect(UserInputService.InputEnded, function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch) then
+                    dragging = false
+                    setHot(false)
+                    onResizeEnd()
+                end
+            end)
+            return h
+        end
+
+        -- Kanten (die Topbar bleibt frei, damit man das Fenster weiter verschieben kann)
+        Handle("Right", UDim2.new(1, -EDGE, 0, 46), UDim2.new(0, EDGE, 1, -46 - CORNER), "x", false)
+        Handle("Left", UDim2.new(0, 0, 0, 46), UDim2.new(0, EDGE, 1, -46 - EDGE), "x", false)
+        Handle("Bottom", UDim2.new(0, 0, 1, -EDGE), UDim2.new(1, -CORNER, 0, EDGE), "y", false)
+        -- Ecke unten rechts (zuletzt erstellt, liegt oben)
+        Handle("Corner", UDim2.new(1, -CORNER, 1, -CORNER), UDim2.fromOffset(CORNER, CORNER), "d", true)
+    end
+
     avatarBtn.MouseButton1Click:Connect(function()
         if windowObj.HomeTab then
             windowObj:SelectTab(windowObj.HomeTab)
@@ -1463,10 +1588,16 @@ function VexUI:CreateWindow(opts)
             task.delay(0.2, function()
                 if windowObj.Minimized then
                     body.Visible = false
+                    if resizeLayer then
+                        resizeLayer.Visible = false
+                    end
                 end
             end)
         else
             body.Visible = true
+            if resizeLayer then
+                resizeLayer.Visible = true
+            end
             Tween(main, 0.2, { Size = size })
         end
     end)
@@ -2067,10 +2198,10 @@ function Window:AddSettingsTab(opts)
 
     -- Scale wird erst angewendet, wenn der Slider kurz stillsteht (sonst springt die UI unter dem Finger)
     local scaleToken = 0
-    menu:AddSlider("VexUI_Scale", {
+    self._scaleSlider = menu:AddSlider("VexUI_Scale", {
         Text = "UI scale",
         Min = 40,
-        Max = 150,
+        Max = 200,
         Default = math.floor(self.Scale.Scale * 100 + 0.5),
         Rounding = 0,
         Suffix = "%",
