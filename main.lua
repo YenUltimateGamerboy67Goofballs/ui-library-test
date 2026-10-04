@@ -15,6 +15,20 @@
         Library.Options.Targets.Value           -- Map { [Name] = true }
         dd.GetSelected()                        -- geordnetes Array { "Players", "Bosses" }
         dd.Set({ "NPCs" })  dd.SelectAll()  dd.Clear()
+
+    Deaktivierte Elemente (wie bei Obsidian) + Tooltips:
+        local t = Box:AddToggle("AutoFarmV2", {
+            Text = "Auto Farm V2",
+            Disabled = true,                              -- ausgegraut, mit Schloss, nicht bedienbar
+            DisabledTooltip = "Premium only - join our Discord",   -- erscheint beim Hovern (Handy: antippen)
+            Tooltip = "Normaler Tooltip (optional)",
+        })
+        t:SetDisabled(false)                  -- freischalten (t.SetDisabled(false) geht auch)
+        t:SetDisabledTooltip("anderer Text")  t:SetTooltip("...")
+        t.Disabled   t:IsDisabled()
+        Gilt fuer AddToggle, AddButton, AddSlider, AddDropdown, AddTextbox, AddColorPicker, AddKeyPicker.
+        Deaktivierte Elemente ignorieren Set/SetValue (auch beim Config-Laden).
+        AddButton gibt jetzt ein Objekt zurueck (die TextButton-Instanz ist unter .Instance).
 ]]
 
 local RavineUI = {
@@ -25,7 +39,7 @@ local RavineUI = {
 }
 
 RavineUI.__index = RavineUI
-RavineUI.Build = "resize-10-multi"
+RavineUI.Build = "resize-10-multi-disabled"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -35,6 +49,7 @@ local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local Stats = game:GetService("Stats")
 local LocalizationService = game:GetService("LocalizationService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Touch-Geraet ohne Tastatur = Mobile (kann in CreateWindow mit Mobile = true/false ueberschrieben werden)
@@ -164,6 +179,14 @@ end
 local function Round(v, decimals)
     local m = 10 ^ (decimals or 0)
     return math.floor(v * m + 0.5) / m
+end
+
+-- Erlaubt sowohl obj.Set(x) als auch obj:Set(x) (bei ":" wird obj selbst als erstes Argument uebergeben)
+local function Arg(obj, a, b)
+    if a == obj then
+        return b
+    end
+    return a
 end
 
 local function FormatTime(s)
@@ -407,6 +430,148 @@ local function EnsureGui()
         Parent = GetGuiParent(),
     })
     return RavineUI.Gui
+end
+
+-- ============ TOOLTIP ============
+-- Ein gemeinsamer Tooltip, haengt direkt im ScreenGui (wird also nie von ScrollingFrames abgeschnitten)
+local Tip = { Frame = nil, Label = nil, Conn = nil, Token = 0, Bounds = nil }
+
+local function TipEnsure()
+    if Tip.Frame and Tip.Frame.Parent then
+        return Tip.Frame
+    end
+    local gui = EnsureGui()
+    local f = Create("Frame", {
+        Name = "Tooltip",
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.XY,
+        Size = UDim2.fromOffset(0, 0),
+        Visible = false,
+        ZIndex = 1000,
+        Parent = gui,
+    })
+    Corner(f, 6)
+    Stroke(f, Theme.Border, 1)
+    Create("UIPadding", {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 7),
+        PaddingBottom = UDim.new(0, 7),
+        Parent = f,
+    })
+    local label = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.XY,
+        Size = UDim2.fromOffset(0, 0),
+        Font = Theme.Font,
+        Text = "",
+        TextColor3 = Theme.Text,
+        TextSize = 12,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 1001,
+        Parent = f,
+    })
+    Create("UISizeConstraint", { MaxSize = Vector2.new(260, 1000), Parent = label })
+    Tip.Frame = f
+    Tip.Label = label
+    return f
+end
+
+local function TipHide()
+    Tip.Token = Tip.Token + 1
+    Tip.Bounds = nil
+    if Tip.Conn then
+        Tip.Conn:Disconnect()
+        Tip.Conn = nil
+    end
+    if Tip.Frame then
+        Tip.Frame.Visible = false
+    end
+end
+
+-- Versteckt nur, wenn der Tooltip gerade zu diesem Element gehoert
+local function TipHideFor(bounds)
+    if Tip.Bounds == bounds then
+        TipHide()
+    end
+end
+
+local function TipPlace(tx, ty, flipY)
+    local f = Tip.Frame
+    if not f then
+        return
+    end
+    local vp = (RavineUI.Gui and RavineUI.Gui.AbsoluteSize) or Vector2.new(1920, 1080)
+    local sz = f.AbsoluteSize
+    local px = math.clamp(tx, 4, math.max(vp.X - sz.X - 4, 4))
+    local py = ty
+    if py + sz.Y > vp.Y - 4 then
+        py = flipY - sz.Y
+    end
+    f.Position = UDim2.fromOffset(px, math.max(py, 4))
+end
+
+-- Folgt dem Mauszeiger; verschwindet, sobald der Cursor das Element (bounds) verlaesst
+local function TipShow(text, bounds)
+    TipHide()
+    if not text or text == "" then
+        return
+    end
+    local f = TipEnsure()
+    Tip.Label.Text = text
+    Tip.Bounds = bounds
+    f.Visible = true
+    local function update()
+        if bounds and not bounds.Parent then
+            TipHide()
+            return
+        end
+        local m = UserInputService:GetMouseLocation()
+        if bounds then
+            local p, sz = bounds.AbsolutePosition, bounds.AbsoluteSize
+            if m.X < p.X or m.Y < p.Y or m.X > p.X + sz.X or m.Y > p.Y + sz.Y then
+                TipHide()
+                return
+            end
+        end
+        TipPlace(m.X + 14, m.Y + 18, m.Y - 10)
+    end
+    update()
+    if Tip.Frame and Tip.Frame.Visible then
+        Tip.Conn = RunService.RenderStepped:Connect(update)
+    end
+end
+
+-- Fuer Touch: Tooltip kurz unter dem Element zeigen
+local function TipFlash(text, target)
+    TipHide()
+    if not text or text == "" then
+        return
+    end
+    local f = TipEnsure()
+    Tip.Label.Text = text
+    Tip.Bounds = target
+    f.Visible = true
+    local token = Tip.Token
+    local function place()
+        if Tip.Token == token and target.Parent then
+            local p, sz = target.AbsolutePosition, target.AbsoluteSize
+            TipPlace(p.X, p.Y + sz.Y + 6, p.Y - 6)
+        end
+    end
+    place()
+    task.defer(place)
+    task.delay(2.5, function()
+        if Tip.Token == token then
+            TipHide()
+        end
+    end)
+end
+
+function RavineUI:HideTooltip()
+    TipHide()
 end
 
 -- ============ NOTIFICATIONS ============
@@ -969,6 +1134,7 @@ end
 -- ============ UNLOAD ============
 function RavineUI:Unload()
     self.Unloaded = true
+    TipHide()
     for _, c in ipairs(Connections) do
         pcall(function()
             c:Disconnect()
@@ -1665,6 +1831,7 @@ function RavineUI:CreateWindow(opts)
 end
 
 function Window:Toggle()
+    TipHide()
     self.Main.Visible = not self.Main.Visible
 end
 
@@ -1843,6 +2010,7 @@ function Window:SelectTab(tab)
     if self.ActiveTab == tab then
         return
     end
+    TipHide()
     for _, t in ipairs(self.Tabs) do
         t.Frame.Visible = false
         t:_SetActive(false)
@@ -2448,6 +2616,127 @@ local function HitButton(row, height)
     })
 end
 
+-- Deaktivieren (wie bei Obsidian): graut das Element aus, blockiert alle Eingaben und zeigt optional einen Tooltip
+local function MakeDisabler(target, radius, opts)
+    local d = { Tip = opts.DisabledTooltip }
+    local overlay = Create("TextButton", {
+        Name = "DisabledOverlay",
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        Text = "",
+        AutoButtonColor = false,
+        Visible = false,
+        ZIndex = 20,
+        Parent = target,
+    })
+    Corner(overlay, radius or 6)
+    local lock = NewIcon(overlay, "lock", 14, Theme.SubText, "!")
+    lock.Instance.AnchorPoint = Vector2.new(1, 0.5)
+    lock.Instance.Position = UDim2.new(1, -12, 0.5, 0)
+    lock.Instance.ZIndex = 21
+
+    overlay.MouseEnter:Connect(function()
+        if d.Tip then
+            TipShow(d.Tip, overlay)
+        end
+    end)
+    overlay.MouseLeave:Connect(function()
+        TipHideFor(overlay)
+    end)
+    overlay.MouseButton1Click:Connect(function()
+        if d.Tip and UserInputService.TouchEnabled then
+            TipFlash(d.Tip, overlay)
+        end
+    end)
+
+    d.Overlay = overlay
+    d.Set = function(v)
+        overlay.Visible = v
+        if not v then
+            TipHideFor(overlay)
+        end
+    end
+    return d
+end
+
+-- Haengt SetDisabled / SetDisabledTooltip / IsDisabled an ein Element. onChange(v) wird bei jedem Wechsel gerufen.
+local function AttachDisable(obj, target, radius, opts, onChange)
+    local d = MakeDisabler(target, radius, opts)
+    obj.Disabled = false
+    obj.SetDisabled = function(a, b)
+        local v = Arg(obj, a, b) and true or false
+        obj.Disabled = v
+        d.Set(v)
+        if onChange then
+            onChange(v)
+        end
+    end
+    obj.SetDisabledTooltip = function(a, b)
+        d.Tip = Arg(obj, a, b)
+    end
+    obj.IsDisabled = function()
+        return obj.Disabled
+    end
+    if opts.Disabled then
+        obj.SetDisabled(true)
+    end
+end
+
+-- Normaler Hover-Tooltip (opts.Tooltip / obj:SetTooltip). Nur mit Maus, auf reinen Touch-Geraeten gibt es keinen Hover.
+local function AttachTooltip(obj, target, opts)
+    local text = opts.Tooltip
+    local hooked = false
+    local count, token = 0, 0
+
+    local function enter()
+        count = count + 1
+        if count == 1 then
+            token = token + 1
+            local mine = token
+            task.delay(0.4, function()
+                if mine == token and count > 0 and text and not obj.Disabled then
+                    TipShow(text, target)
+                end
+            end)
+        end
+    end
+    local function leave()
+        count = math.max(count - 1, 0)
+        if count == 0 then
+            token = token + 1
+            TipHideFor(target)
+        end
+    end
+    local function hook(o)
+        o.MouseEnter:Connect(enter)
+        o.MouseLeave:Connect(leave)
+    end
+    local function ensure()
+        if hooked then
+            return
+        end
+        hooked = true
+        hook(target)
+        for _, c in ipairs(target:GetDescendants()) do
+            if c:IsA("GuiButton") or c:IsA("TextBox") then
+                hook(c)
+            end
+        end
+    end
+
+    obj.SetTooltip = function(a, b)
+        text = Arg(obj, a, b)
+        if text and not (UserInputService.TouchEnabled and not UserInputService.MouseEnabled) then
+            ensure()
+        end
+    end
+    if text then
+        obj.SetTooltip(text)
+    end
+end
+
 -- thickness = Dicke der Linie in Pixel (Standard 2), drumherum kommt zusaetzlicher Abstand
 function Groupbox:AddDivider(thickness)
     local t = thickness or 2
@@ -2514,7 +2803,20 @@ function Groupbox:AddButton(name, opts)
         Tween(btn, 0.15, { BackgroundColor3 = Theme.Tertiary })
         Tween(strk, 0.15, { Color = Theme.Border })
     end)
+    -- Objekt statt nackter Instanz (Lesezugriffe wie obj.Text werden an die TextButton-Instanz weitergereicht)
+    local obj = setmetatable({ Instance = btn, Container = btn, Type = "Button" }, {
+        __index = function(_, k)
+            return btn[k]
+        end,
+    })
+    obj.SetText = function(a, b)
+        btn.Text = tostring(Arg(obj, a, b))
+    end
+
     btn.MouseButton1Click:Connect(function()
+        if obj.Disabled then
+            return
+        end
         task.spawn(callback)
         if RavineUI.IsMobile then
             task.delay(0.15, function()
@@ -2526,7 +2828,9 @@ function Groupbox:AddButton(name, opts)
         end
     end)
 
-    return btn
+    AttachTooltip(obj, btn, opts)
+    AttachDisable(obj, btn, 6, opts)
+    return obj
 end
 
 function Groupbox:AddToggle(id, opts)
@@ -2566,17 +2870,27 @@ function Groupbox:AddToggle(id, opts)
     end
 
     HitButton(row, 34).MouseButton1Click:Connect(function()
+        if obj.Disabled then
+            return
+        end
         setState(not state)
     end)
 
     obj.Container = row
-    obj.Set = setState
+    obj.Set = function(a, b)
+        if obj.Disabled then
+            return
+        end
+        setState(Arg(obj, a, b))
+    end
     obj.Get = function()
         return state
     end
     function obj:SetValue(v)
-        setState(v)
+        obj.Set(v)
     end
+    AttachTooltip(obj, row, opts)
+    AttachDisable(obj, row, 6, opts)
     return obj
 end
 
@@ -2664,19 +2978,28 @@ function Groupbox:AddSlider(id, opts)
     end
 
     TrackDrag(hit, self.Column, function(pos)
+        if obj.Disabled then
+            return
+        end
         local rel = math.clamp((pos.X - barBg.AbsolutePosition.X) / math.max(barBg.AbsoluteSize.X, 1), 0, 1)
         setValue(min + range * rel)
     end)
 
-    obj.Set = function(v)
-        setValue(v, 0.1)
+    obj.Container = row
+    obj.Set = function(a, b)
+        if obj.Disabled then
+            return
+        end
+        setValue(Arg(obj, a, b), 0.1)
     end
     obj.Get = function()
         return value
     end
     function obj:SetValue(v)
-        setValue(v, 0.1)
+        obj.Set(v)
     end
+    AttachTooltip(obj, row, opts)
+    AttachDisable(obj, row, 6, opts)
     return obj
 end
 
@@ -2919,12 +3242,19 @@ function Groupbox:AddDropdown(id, opts)
     refresh()
 
     hit.MouseButton1Click:Connect(function()
+        if obj.Disabled then
+            return
+        end
         setOpen(not open)
     end)
 
     obj.Container = row
     obj.Multi = multi
-    obj.Set = function(v)
+    obj.Set = function(a, b)
+        if obj.Disabled then
+            return
+        end
+        local v = Arg(obj, a, b)
         if multi then
             selected = toMap(v)
             applyMulti()
@@ -2953,18 +3283,22 @@ function Groupbox:AddDropdown(id, opts)
         return out
     end
     obj.SelectAll = function()
-        if multi then
+        if multi and not obj.Disabled then
             selected = toMap(values)
             applyMulti()
         end
     end
     obj.Clear = function()
-        if multi then
+        if multi and not obj.Disabled then
             selected = {}
             applyMulti()
         end
     end
-    obj.Refresh = function(newValues)
+    obj.Refresh = function(a, b)
+        local newValues = Arg(obj, a, b)
+        if type(newValues) ~= "table" then
+            return
+        end
         values = newValues
         local before = count()
         if multi then
@@ -2985,6 +3319,12 @@ function Groupbox:AddDropdown(id, opts)
     function obj:SetValue(v)
         obj.Set(v)
     end
+    AttachTooltip(obj, row, opts)
+    AttachDisable(obj, row, 6, opts, function(v)
+        if v and open then
+            setOpen(false)
+        end
+    end)
     return obj
 end
 
@@ -3027,7 +3367,11 @@ function Groupbox:AddTextbox(id, opts)
 
     obj.Instance = box
     obj.Container = row
-    obj.Set = function(t)
+    obj.Set = function(a, b)
+        if obj.Disabled then
+            return
+        end
+        local t = Arg(obj, a, b)
         box.Text = tostring(t)
         changed(box.Text)
         task.spawn(callback, box.Text)
@@ -3038,6 +3382,17 @@ function Groupbox:AddTextbox(id, opts)
     function obj:SetValue(t)
         obj.Set(t)
     end
+    AttachTooltip(obj, row, opts)
+    AttachDisable(obj, row, 6, opts, function(v)
+        box.TextEditable = not v
+        if v then
+            pcall(function()
+                if box:IsFocused() then
+                    box:ReleaseFocus()
+                end
+            end)
+        end
+    end)
     return obj
 end
 
@@ -3154,12 +3509,19 @@ function Groupbox:AddColorPicker(id, opts)
     end)
 
     hit.MouseButton1Click:Connect(function()
+        if obj.Disabled then
+            return
+        end
         open = not open
         Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, open and (40 + PICK_H + 10) or 34) })
     end)
 
     obj.Container = row
-    obj.Set = function(c)
+    obj.Set = function(a, b)
+        if obj.Disabled then
+            return
+        end
+        local c = Arg(obj, a, b)
         h, s, v = Color3.toHSV(c)
         commit()
     end
@@ -3169,6 +3531,13 @@ function Groupbox:AddColorPicker(id, opts)
     function obj:SetValue(c)
         obj.Set(c)
     end
+    AttachTooltip(obj, row, opts)
+    AttachDisable(obj, row, 6, opts, function(v)
+        if v and open then
+            open = false
+            Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, 34) })
+        end
+    end)
     return obj
 end
 
@@ -3199,6 +3568,9 @@ function Groupbox:AddKeyPicker(id, opts)
     Stroke(keyLabel, Theme.Border, 1)
 
     keyLabel.MouseButton1Click:Connect(function()
+        if obj.Disabled then
+            return
+        end
         listening = true
         keyLabel.Text = "..."
     end)
@@ -3216,13 +3588,18 @@ function Groupbox:AddKeyPicker(id, opts)
                 end
                 keyLabel.Text = current
             end
-        elseif input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == current then
+        elseif input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == current
+            and not obj.Disabled then
             task.spawn(callback)
         end
     end)
 
     obj.Container = row
-    obj.Set = function(k)
+    obj.Set = function(a, b)
+        if obj.Disabled then
+            return
+        end
+        local k = Arg(obj, a, b)
         current = k
         keyLabel.Text = k
         changed(k)
@@ -3233,6 +3610,13 @@ function Groupbox:AddKeyPicker(id, opts)
     function obj:SetValue(k)
         obj.Set(k)
     end
+    AttachTooltip(obj, row, opts)
+    AttachDisable(obj, row, 6, opts, function(v)
+        if v then
+            listening = false
+            keyLabel.Text = current
+        end
+    end)
     return obj
 end
 
