@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "mobile-7"
+VexUI.Build = "tabs-8"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -1429,6 +1429,19 @@ function VexUI:CreateWindow(opts)
     end
     windowObj._updateScale = updateScale
     updateScale()
+
+    -- Fenster waechst automatisch in der Hoehe, wenn die Tab-Leiste sonst unter das Profilbild ragen wuerde
+    windowObj._ensureHeight = function(minHeight)
+        if size.Y.Scale ~= 0 or size.Y.Offset >= minHeight then
+            return
+        end
+        size = UDim2.new(size.X.Scale, size.X.Offset, 0, minHeight)
+        windowObj.Size = size
+        if not windowObj.Minimized then
+            Tween(main, 0.2, { Size = size })
+        end
+        updateScale()
+    end
     if workspace.CurrentCamera then
         Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), updateScale)
     end
@@ -1663,6 +1676,11 @@ function Window:AddTab(name, icon)
     table.insert(self.Tabs, tab)
     if not self.ActiveTab then
         self:SelectTab(tab)
+    end
+
+    -- Platz fuer alle Tabs: Topbar 46 + Avatar-Bereich 64 + Tabs (je 42 + 6 Abstand) + etwas Luft
+    if self._ensureHeight then
+        self._ensureHeight(116 + 48 * #self.Tabs)
     end
 
     return tab
