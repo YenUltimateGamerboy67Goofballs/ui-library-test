@@ -1,6 +1,20 @@
 --[[
     VexUI - Modern Dashboard UI Library
     Version 2.1
+
+    Dropdown mit Mehrfachauswahl:
+        local dd = Box:AddDropdown("Targets", {
+            Text = "Targets",
+            Values = { "Players", "NPCs", "Bosses" },
+            Multi = true,
+            Default = { "Players" },            -- Array {"A","B"} oder Map {A = true}
+            Callback = function(selected)       -- selected = { Players = true, Bosses = true }
+                print(selected.Players)
+            end,
+        })
+        Library.Options.Targets.Value           -- Map { [Name] = true }
+        dd.GetSelected()                        -- geordnetes Array { "Players", "Bosses" }
+        dd.Set({ "NPCs" })  dd.SelectAll()  dd.Clear()
 ]]
 
 local VexUI = {
@@ -11,7 +25,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "resize-10"
+VexUI.Build = "resize-10-multi"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -2666,13 +2680,86 @@ function Groupbox:AddSlider(id, opts)
     return obj
 end
 
+-- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
 function Groupbox:AddDropdown(id, opts)
     opts = opts or {}
     local values = opts.Values or {}
     local callback = opts.Callback or function() end
-    local current = opts.Default or (values[1] or "")
+    local multi = opts.Multi == true
+    local current = nil
+    if not multi then
+        current = opts.Default or (values[1] or "")
+    end
+    local selected = {} -- nur Multi: [tostring(Wert)] = true
     local open = false
-    local obj, changed = NewOption("Dropdown", id, current)
+
+    -- ---- Multi-Helfer ----
+    local function inValues(key)
+        for _, v in ipairs(values) do
+            if tostring(v) == key then
+                return true
+            end
+        end
+        return false
+    end
+
+    -- akzeptiert Array {"A","B"}, Map {A = true} oder einen einzelnen Wert
+    local function toMap(v)
+        local map = {}
+        local function add(x)
+            local k = tostring(x)
+            if inValues(k) then
+                map[k] = true
+            end
+        end
+        if type(v) == "table" then
+            for k, val in pairs(v) do
+                if type(k) == "number" then
+                    add(val)
+                elseif val then
+                    add(k)
+                end
+            end
+        elseif v ~= nil and v ~= "" then
+            add(v)
+        end
+        return map
+    end
+
+    local function snapshot()
+        local m = {}
+        for k in pairs(selected) do
+            m[k] = true
+        end
+        return m
+    end
+
+    local function count()
+        local n = 0
+        for _ in pairs(selected) do
+            n = n + 1
+        end
+        return n
+    end
+
+    local function summary()
+        local n = count()
+        if n == 0 then
+            return "None"
+        end
+        if n == 1 then
+            for k in pairs(selected) do
+                return k
+            end
+        end
+        return n .. " selected"
+    end
+
+    if multi then
+        selected = toMap(opts.Default)
+    end
+
+    local obj, changed = NewOption("Dropdown", id, multi and snapshot() or current)
 
     local row = AddRow(self, 34, true)
     RowLabel(row, opts.Text or id, 130)
@@ -2682,7 +2769,7 @@ function Groupbox:AddDropdown(id, opts)
         Position = UDim2.new(1, -130, 0, 0),
         Size = UDim2.new(0, 104, 0, 34),
         Font = Theme.Font,
-        Text = tostring(current),
+        Text = multi and summary() or tostring(current),
         TextColor3 = Theme.Accent,
         TextSize = 12,
         TextTruncate = Enum.TextTruncate.AtEnd,
@@ -2712,7 +2799,7 @@ function Groupbox:AddDropdown(id, opts)
         Parent = list,
     })
 
-    local buttons = {}
+    local entries = {}
     local function listHeight()
         return math.min(#values * 26, 130)
     end
@@ -2734,31 +2821,72 @@ function Groupbox:AddDropdown(id, opts)
         end
     end
 
-    local function select(val)
+    local function isSelected(val)
+        if multi then
+            return selected[tostring(val)] == true
+        end
+        return tostring(val) == tostring(current)
+    end
+
+    -- Ruhe-Zustand der Option: bei Multi sind gewaehlte Eintraege leicht eingefaerbt
+    local function restTransparency(val)
+        return (multi and isSelected(val)) and 0.85 or 1
+    end
+
+    local function styleEntry(e)
+        local sel = isSelected(e.Value)
+        e.Button.TextColor3 = sel and Theme.Accent or Theme.Text
+        e.Check.Instance.Visible = multi and sel
+        Tween(e.Button, 0.1, { BackgroundTransparency = restTransparency(e.Value) })
+    end
+
+    -- Einzelauswahl
+    local function choose(val)
         current = val
         currentLabel.Text = tostring(val)
-        for _, b in ipairs(buttons) do
-            b.TextColor3 = (b.Text == tostring(current)) and Theme.Accent or Theme.Text
+        for _, e in ipairs(entries) do
+            styleEntry(e)
         end
         changed(val)
         task.spawn(callback, val)
     end
 
-    local function refresh()
-        for _, b in ipairs(buttons) do
-            b:Destroy()
+    -- Mehrfachauswahl
+    local function applyMulti()
+        currentLabel.Text = summary()
+        for _, e in ipairs(entries) do
+            styleEntry(e)
         end
-        buttons = {}
+        local snap = snapshot()
+        changed(snap)
+        task.spawn(callback, snap)
+    end
+
+    local function toggleMulti(val)
+        local k = tostring(val)
+        if selected[k] then
+            selected[k] = nil
+        else
+            selected[k] = true
+        end
+        applyMulti()
+    end
+
+    local function refresh()
+        for _, e in ipairs(entries) do
+            e.Button:Destroy()
+        end
+        entries = {}
         for i, val in ipairs(values) do
             local option = Create("TextButton", {
                 BackgroundColor3 = Theme.Accent,
-                BackgroundTransparency = 1,
+                BackgroundTransparency = restTransparency(val),
                 BorderSizePixel = 0,
                 Size = UDim2.new(1, -4, 0, 24),
                 LayoutOrder = i,
                 Font = Theme.Font,
                 Text = tostring(val),
-                TextColor3 = (tostring(val) == tostring(current)) and Theme.Accent or Theme.Text,
+                TextColor3 = isSelected(val) and Theme.Accent or Theme.Text,
                 TextSize = 12,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 AutoButtonColor = false,
@@ -2766,17 +2894,26 @@ function Groupbox:AddDropdown(id, opts)
             })
             Create("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = option })
             Corner(option, 4)
+            local check = NewIcon(option, "check", 14, Theme.Accent, "•")
+            check.Instance.Position = UDim2.new(1, -22, 0.5, -7)
+            check.Instance.Visible = multi and isSelected(val)
+            table.insert(entries, { Button = option, Check = check, Value = val })
+
             option.MouseEnter:Connect(function()
                 Tween(option, 0.1, { BackgroundTransparency = 0.7 })
             end)
             option.MouseLeave:Connect(function()
-                Tween(option, 0.1, { BackgroundTransparency = 1 })
+                Tween(option, 0.1, { BackgroundTransparency = restTransparency(val) })
             end)
             option.MouseButton1Click:Connect(function()
-                select(val)
-                setOpen(false)
+                if multi then
+                    -- Liste bleibt offen, damit man mehrere Eintraege nacheinander waehlen kann
+                    toggleMulti(val)
+                else
+                    choose(val)
+                    setOpen(false)
+                end
             end)
-            table.insert(buttons, option)
         end
     end
     refresh()
@@ -2786,21 +2923,67 @@ function Groupbox:AddDropdown(id, opts)
     end)
 
     obj.Container = row
+    obj.Multi = multi
     obj.Set = function(v)
-        select(v)
+        if multi then
+            selected = toMap(v)
+            applyMulti()
+        else
+            choose(v)
+        end
     end
     obj.Get = function()
+        if multi then
+            return snapshot()
+        end
         return current
+    end
+    -- geordnetes Array der gewaehlten Werte (bei Einzelauswahl: Array mit einem Wert)
+    obj.GetSelected = function()
+        local out = {}
+        if multi then
+            for _, v in ipairs(values) do
+                if selected[tostring(v)] then
+                    table.insert(out, v)
+                end
+            end
+        elseif current ~= nil and current ~= "" then
+            table.insert(out, current)
+        end
+        return out
+    end
+    obj.SelectAll = function()
+        if multi then
+            selected = toMap(values)
+            applyMulti()
+        end
+    end
+    obj.Clear = function()
+        if multi then
+            selected = {}
+            applyMulti()
+        end
     end
     obj.Refresh = function(newValues)
         values = newValues
+        local before = count()
+        if multi then
+            -- Auswahl auf Werte beschraenken, die es noch gibt
+            selected = toMap(selected)
+        end
         refresh()
+        if multi then
+            currentLabel.Text = summary()
+            if count() ~= before then
+                applyMulti()
+            end
+        end
         if open then
             setOpen(true)
         end
     end
     function obj:SetValue(v)
-        select(v)
+        obj.Set(v)
     end
     return obj
 end
