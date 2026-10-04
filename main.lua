@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "logo-6"
+VexUI.Build = "mobile-7"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -22,6 +22,9 @@ local CoreGui = game:GetService("CoreGui")
 local Stats = game:GetService("Stats")
 local LocalizationService = game:GetService("LocalizationService")
 local LocalPlayer = Players.LocalPlayer
+
+-- Touch-Geraet ohne Tastatur = Mobile (kann in CreateWindow mit Mobile = true/false ueberschrieben werden)
+VexUI.IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 local GENV = (getgenv and getgenv()) or _G
 if GENV.VexUI_Instance and GENV.VexUI_Instance.Unload then
@@ -44,6 +47,7 @@ local Theme = {
     Card = Color3.fromRGB(7, 7, 9),
     Border = Color3.fromRGB(42, 42, 50),
     BorderLight = Color3.fromRGB(55, 55, 65),
+    Divider = Color3.fromRGB(70, 70, 84),
     Text = Color3.fromRGB(235, 235, 240),
     SubText = Color3.fromRGB(140, 140, 155),
     Accent = Color3.fromRGB(200, 30, 40),
@@ -383,6 +387,7 @@ local function EnsureGui()
     VexUI.Gui = Create("ScreenGui", {
         Name = "VexUI",
         ResetOnSpawn = false,
+        IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 100,
         Parent = GetGuiParent(),
@@ -523,6 +528,7 @@ function VexUI:ShowChangelog(opts)
     local gui = Create("ScreenGui", {
         Name = "VexUI_Changelog",
         ResetOnSpawn = false,
+        IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 999,
         Parent = GetGuiParent(),
@@ -1160,12 +1166,47 @@ local function GetExecutorName()
     return (ok and name) or "Unknown executor"
 end
 
+-- ============ SCALE SPEICHERN ============
+local ScaleFile = "VexUI/scale.txt"
+
+local function ReadSavedScale()
+    if not HasFS() then
+        return nil
+    end
+    local ok, v = pcall(function()
+        if isfile(ScaleFile) then
+            return tonumber(readfile(ScaleFile))
+        end
+        return nil
+    end)
+    if ok and v then
+        return math.clamp(v, 0.4, 2)
+    end
+    return nil
+end
+
+local function WriteSavedScale(v)
+    if not HasFS() then
+        return
+    end
+    pcall(function()
+        EnsureFolders()
+        writefile(ScaleFile, tostring(v))
+    end)
+end
+
 -- ============ WINDOW ============
 function VexUI:CreateWindow(opts)
     opts = opts or {}
     local title = opts.Title or "VexUI"
     local subtitle = opts.Subtitle or ""
-    local size = opts.Size or UDim2.fromOffset(700, 430)
+    local mobile = opts.Mobile
+    if mobile == nil then
+        mobile = VexUI.IsMobile
+    end
+    VexUI.IsMobile = mobile
+    local size = opts.Size or (mobile and UDim2.fromOffset(600, 380) or UDim2.fromOffset(700, 430))
+    local savedScale = ReadSavedScale()
     local gui = EnsureGui()
 
     local main = Create("Frame", {
@@ -1367,6 +1408,7 @@ function VexUI:CreateWindow(opts)
         Minimized = false,
         Alive = true,
         Size = size,
+        UserScale = savedScale,
     }, Window)
     windowObj.Logo = logo
     windowObj.TitleHolder = titleHolder
@@ -1377,10 +1419,15 @@ function VexUI:CreateWindow(opts)
         if not cam then
             return
         end
+        if windowObj.UserScale then
+            uiScale.Scale = math.clamp(windowObj.UserScale, 0.4, 2)
+            return
+        end
         local vp = cam.ViewportSize
         local fit = math.min((vp.X - 24) / math.max(size.X.Offset, 1), (vp.Y - 24) / math.max(size.Y.Offset, 1))
-        uiScale.Scale = math.clamp(math.min(opts.Scale or 1, fit), 0.5, 2)
+        uiScale.Scale = math.clamp(math.min(opts.Scale or 1, fit), 0.4, 2)
     end
+    windowObj._updateScale = updateScale
     updateScale()
     if workspace.CurrentCamera then
         Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), updateScale)
@@ -1422,14 +1469,14 @@ function VexUI:CreateWindow(opts)
 
     local wantButton = opts.ToggleButton
     if wantButton == nil then
-        wantButton = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+        wantButton = mobile
     end
     if wantButton then
         local fb = Create("TextButton", {
             Name = "ToggleButton",
             BackgroundColor3 = Theme.Secondary,
-            Position = UDim2.new(0, 16, 0.5, -22),
-            Size = UDim2.fromOffset(44, 44),
+            Position = UDim2.new(0, 16, 0.5, -24),
+            Size = UDim2.fromOffset(48, 48),
             Text = "",
             AutoButtonColor = false,
             Parent = gui,
@@ -1462,6 +1509,25 @@ function Window:SetLogoSize(px)
     local titleX = self._logoX + px + 10
     self.TitleHolder.Position = UDim2.new(0, titleX, 0, 0)
     self.TitleHolder.Size = UDim2.new(1, -(titleX + 122), 1, 0)
+end
+
+-- Skaliert die ganze UI. scale = 1 ist normal, nil = automatisch an den Bildschirm anpassen
+function Window:SetScale(scale, save)
+    if scale then
+        self.UserScale = math.clamp(tonumber(scale) or 1, 0.4, 2)
+    else
+        self.UserScale = nil
+    end
+    if self._updateScale then
+        self._updateScale()
+    end
+    if save and self.UserScale then
+        WriteSavedScale(self.UserScale)
+    end
+end
+
+function Window:GetScale()
+    return self.Scale.Scale
 end
 
 function Window:Notify(opts)
@@ -1588,6 +1654,9 @@ function Window:AddTab(name, icon)
         end
     end)
     btn.MouseButton1Click:Connect(function()
+        if VexUI.IsMobile then
+            tip.Visible = false
+        end
         self:SelectTab(tab)
     end)
 
@@ -1963,18 +2032,41 @@ function Window:AddSettingsTab(opts)
     local tab = self:AddTab(opts.Name or "Settings", opts.Icon or "settings")
 
     local menu = tab:AddLeftGroupbox("Menu", "layout-dashboard")
-    local keybind = menu:AddKeyPicker("VexUI_MenuKey", {
-        Text = "Menu keybind",
-        Default = self.ToggleKeybind.Name,
-    })
-    keybind:OnChanged(function(keyName)
-        local ok, key = pcall(function()
-            return Enum.KeyCode[keyName]
+    if not VexUI.IsMobile then
+        local keybind = menu:AddKeyPicker("VexUI_MenuKey", {
+            Text = "Menu keybind",
+            Default = self.ToggleKeybind.Name,
+        })
+        keybind:OnChanged(function(keyName)
+            local ok, key = pcall(function()
+                return Enum.KeyCode[keyName]
+            end)
+            if ok and key then
+                self.ToggleKeybind = key
+            end
         end)
-        if ok and key then
-            self.ToggleKeybind = key
-        end
-    end)
+    end
+
+    -- Scale wird erst angewendet, wenn der Slider kurz stillsteht (sonst springt die UI unter dem Finger)
+    local scaleToken = 0
+    menu:AddSlider("VexUI_Scale", {
+        Text = "UI scale",
+        Min = 40,
+        Max = 150,
+        Default = math.floor(self.Scale.Scale * 100 + 0.5),
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(v)
+            scaleToken += 1
+            local token = scaleToken
+            task.delay(0.25, function()
+                if token == scaleToken then
+                    self:SetScale(v / 100, true)
+                end
+            end)
+        end,
+    })
+
     menu:AddButton("Unload UI", {
         Icon = "power",
         Callback = function()
@@ -2185,12 +2277,23 @@ local function HitButton(row, height)
     })
 end
 
-function Groupbox:AddDivider()
-    return Add(self, "Frame", {
-        BackgroundColor3 = Theme.Border,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 1),
+-- thickness = Dicke der Linie in Pixel (Standard 2), drumherum kommt zusaetzlicher Abstand
+function Groupbox:AddDivider(thickness)
+    local t = thickness or 2
+    local holder = Add(self, "Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, t + 12),
     })
+    local line = Create("Frame", {
+        BackgroundColor3 = Theme.Divider,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.new(1, 0, 0, t),
+        Parent = holder,
+    })
+    Corner(line, t)
+    return holder
 end
 
 function Groupbox:AddLabel(text)
@@ -2242,6 +2345,14 @@ function Groupbox:AddButton(name, opts)
     end)
     btn.MouseButton1Click:Connect(function()
         task.spawn(callback)
+        if VexUI.IsMobile then
+            task.delay(0.15, function()
+                pcall(function()
+                    Tween(btn, 0.15, { BackgroundColor3 = Theme.Tertiary })
+                    Tween(strk, 0.15, { Color = Theme.Border })
+                end)
+            end)
+        end
     end)
 
     return btn
