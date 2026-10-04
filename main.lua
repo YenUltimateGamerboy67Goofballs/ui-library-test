@@ -1,5 +1,5 @@
 --[[
-    VexUI - Modern Dashboard UI Library
+    RavineUI - Modern Dashboard UI Library
     Version 2.1
 
     Dropdown mit Mehrfachauswahl:
@@ -17,15 +17,15 @@
         dd.Set({ "NPCs" })  dd.SelectAll()  dd.Clear()
 ]]
 
-local VexUI = {
+local RavineUI = {
     Version = "2.1.0",
     Toggles = {},
     Options = {},
     CustomIcons = {},
 }
 
-VexUI.__index = VexUI
-VexUI.Build = "resize-10-multi"
+RavineUI.__index = RavineUI
+RavineUI.Build = "resize-10-multi"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -38,13 +38,13 @@ local LocalizationService = game:GetService("LocalizationService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Touch-Geraet ohne Tastatur = Mobile (kann in CreateWindow mit Mobile = true/false ueberschrieben werden)
-VexUI.IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+RavineUI.IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 local GENV = (getgenv and getgenv()) or _G
-if GENV.VexUI_Instance and GENV.VexUI_Instance.Unload then
-    pcall(GENV.VexUI_Instance.Unload, GENV.VexUI_Instance)
+if GENV.RavineUI_Instance and GENV.RavineUI_Instance.Unload then
+    pcall(GENV.RavineUI_Instance.Unload, GENV.RavineUI_Instance)
 end
-GENV.VexUI_Instance = VexUI
+GENV.RavineUI_Instance = RavineUI
 
 local Window = {}
 Window.__index = Window
@@ -75,7 +75,7 @@ local Theme = {
     TextSize = 14,
     CornerRadius = 6,
 }
-VexUI.Theme = Theme
+RavineUI.Theme = Theme
 
 -- ============ UTILITIES ============
 local Connections = {}
@@ -267,11 +267,11 @@ end
 
 local IconAliases = { home = "house", gear = "settings", close = "x", plus = "plus", search = "search" }
 
-function VexUI:SetIconModule(mod)
+function RavineUI:SetIconModule(mod)
     IconModule = mod
 end
 
-function VexUI:AddIcon(name, asset)
+function RavineUI:AddIcon(name, asset)
     local url = type(asset) == "number" and ("rbxassetid://" .. asset) or asset
     self.CustomIcons[name] = {
         Url = url,
@@ -280,7 +280,7 @@ function VexUI:AddIcon(name, asset)
     }
 end
 
-function VexUI:GetIcon(icon)
+function RavineUI:GetIcon(icon)
     local t = type(icon)
     if t == "table" then
         return icon.Url and icon or nil
@@ -313,7 +313,7 @@ function VexUI:GetIcon(icon)
 end
 
 local function SetIcon(img, icon)
-    local data = VexUI:GetIcon(icon)
+    local data = RavineUI:GetIcon(icon)
     if not data then
         return false
     end
@@ -378,7 +378,7 @@ local function NewOption(kind, id, value)
         end
     end
 
-    local registry = (kind == "Toggle") and VexUI.Toggles or VexUI.Options
+    local registry = (kind == "Toggle") and RavineUI.Toggles or RavineUI.Options
     registry[id] = obj
     return obj, changed
 end
@@ -395,18 +395,18 @@ local function GetGuiParent()
 end
 
 local function EnsureGui()
-    if VexUI.Gui and VexUI.Gui.Parent then
-        return VexUI.Gui
+    if RavineUI.Gui and RavineUI.Gui.Parent then
+        return RavineUI.Gui
     end
-    VexUI.Gui = Create("ScreenGui", {
-        Name = "VexUI",
+    RavineUI.Gui = Create("ScreenGui", {
+        Name = "RavineUI",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 100,
         Parent = GetGuiParent(),
     })
-    return VexUI.Gui
+    return RavineUI.Gui
 end
 
 -- ============ NOTIFICATIONS ============
@@ -416,8 +416,8 @@ local function EnsureNotifContainer()
     if NotifContainer and NotifContainer.Parent then
         return NotifContainer
     end
-    VexUI.NotifGui = Create("ScreenGui", {
-        Name = "VexUI_Notifs",
+    RavineUI.NotifGui = Create("ScreenGui", {
+        Name = "RavineUI_Notifs",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 101,
@@ -429,7 +429,7 @@ local function EnsureNotifContainer()
         Position = UDim2.new(1, -20, 1, -20),
         Size = UDim2.new(0, 300, 1, -40),
         AnchorPoint = Vector2.new(1, 1),
-        Parent = VexUI.NotifGui,
+        Parent = RavineUI.NotifGui,
     })
     Create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
@@ -442,7 +442,7 @@ local function EnsureNotifContainer()
     return NotifContainer
 end
 
-function VexUI:Notify(opts)
+function RavineUI:Notify(opts)
     if type(opts) == "string" then
         opts = { Description = opts }
     end
@@ -519,7 +519,7 @@ function VexUI:Notify(opts)
 end
 
 -- ============ CHANGELOG SYSTEM ============
-function VexUI:ShowChangelog(opts)
+function RavineUI:ShowChangelog(opts)
     opts = opts or {}
     local scriptName = opts.Title or "Script"
     local version = opts.Version or "1.0.0"
@@ -533,21 +533,21 @@ function VexUI:ShowChangelog(opts)
             stored[k] = v
         end
     end
-    VexUI._LastChangelog = stored
+    RavineUI._LastChangelog = stored
 
-    if VexUI._ChangelogGui and VexUI._ChangelogGui.Parent then
-        VexUI._ChangelogGui:Destroy()
+    if RavineUI._ChangelogGui and RavineUI._ChangelogGui.Parent then
+        RavineUI._ChangelogGui:Destroy()
     end
 
     local gui = Create("ScreenGui", {
-        Name = "VexUI_Changelog",
+        Name = "RavineUI_Changelog",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 999,
         Parent = GetGuiParent(),
     })
-    VexUI._ChangelogGui = gui
+    RavineUI._ChangelogGui = gui
 
     local size = UDim2.fromOffset(520, 470)
 
@@ -870,22 +870,22 @@ function VexUI:ShowChangelog(opts)
 end
 
 -- ============ CONFIG ============
-local ConfigFolder = "VexUI/configs"
+local ConfigFolder = "RavineUI/configs"
 
 local function HasFS()
     return writefile and readfile and isfile and isfolder and makefolder
 end
 
 local function EnsureFolders()
-    if not isfolder("VexUI") then
-        makefolder("VexUI")
+    if not isfolder("RavineUI") then
+        makefolder("RavineUI")
     end
     if not isfolder(ConfigFolder) then
         makefolder(ConfigFolder)
     end
 end
 
-function VexUI:SaveConfig(name)
+function RavineUI:SaveConfig(name)
     if not name or name == "" then
         return false, "Kein Name angegeben"
     end
@@ -895,12 +895,12 @@ function VexUI:SaveConfig(name)
 
     local data = {}
     for id, o in pairs(self.Toggles) do
-        if id:sub(1, 6) ~= "VexUI_" then
+        if id:sub(1, 9) ~= "RavineUI_" then
             data[id] = { t = o.Type, v = o.Value }
         end
     end
     for id, o in pairs(self.Options) do
-        if id:sub(1, 6) ~= "VexUI_" then
+        if id:sub(1, 9) ~= "RavineUI_" then
             local v = o.Value
             if typeof(v) == "Color3" then
                 v = { math.floor(v.R * 255 + 0.5), math.floor(v.G * 255 + 0.5), math.floor(v.B * 255 + 0.5) }
@@ -916,7 +916,7 @@ function VexUI:SaveConfig(name)
     return ok, err
 end
 
-function VexUI:LoadConfig(name)
+function RavineUI:LoadConfig(name)
     if not name or name == "" then
         return false, "Kein Name angegeben"
     end
@@ -948,7 +948,7 @@ function VexUI:LoadConfig(name)
     return true
 end
 
-function VexUI:ListConfigs()
+function RavineUI:ListConfigs()
     local out = {}
     if not (HasFS() and listfiles) then
         return out
@@ -967,7 +967,7 @@ function VexUI:ListConfigs()
 end
 
 -- ============ UNLOAD ============
-function VexUI:Unload()
+function RavineUI:Unload()
     self.Unloaded = true
     for _, c in ipairs(Connections) do
         pcall(function()
@@ -986,8 +986,8 @@ function VexUI:Unload()
     end
     table.clear(self.Toggles)
     table.clear(self.Options)
-    if GENV.VexUI_Instance == self then
-        GENV.VexUI_Instance = nil
+    if GENV.RavineUI_Instance == self then
+        GENV.RavineUI_Instance = nil
     end
 end
 
@@ -1163,7 +1163,7 @@ local function JoinDiscord(invite)
             }),
         })
     end
-    VexUI:Notify({ Title = "Discord", Description = "Invite copied: discord.gg/" .. code, Icon = "circle-check" })
+    RavineUI:Notify({ Title = "Discord", Description = "Invite copied: discord.gg/" .. code, Icon = "circle-check" })
 end
 
 local function GetPing()
@@ -1181,7 +1181,7 @@ local function GetExecutorName()
 end
 
 -- ============ SCALE SPEICHERN ============
-local ScaleFile = "VexUI/scale.txt"
+local ScaleFile = "RavineUI/scale.txt"
 
 local function ReadSavedScale()
     if not HasFS() then
@@ -1210,15 +1210,15 @@ local function WriteSavedScale(v)
 end
 
 -- ============ WINDOW ============
-function VexUI:CreateWindow(opts)
+function RavineUI:CreateWindow(opts)
     opts = opts or {}
-    local title = opts.Title or "VexUI"
+    local title = opts.Title or "RavineUI"
     local subtitle = opts.Subtitle or ""
     local mobile = opts.Mobile
     if mobile == nil then
-        mobile = VexUI.IsMobile
+        mobile = RavineUI.IsMobile
     end
-    VexUI.IsMobile = mobile
+    RavineUI.IsMobile = mobile
     local size = opts.Size or (mobile and UDim2.fromOffset(600, 380) or UDim2.fromOffset(700, 430))
     local savedScale = ReadSavedScale()
     local gui = EnsureGui()
@@ -1697,7 +1697,7 @@ function Window:GetScale()
 end
 
 function Window:Notify(opts)
-    VexUI:Notify(opts)
+    RavineUI:Notify(opts)
 end
 
 function Window:Destroy()
@@ -1820,7 +1820,7 @@ function Window:AddTab(name, icon)
         end
     end)
     btn.MouseButton1Click:Connect(function()
-        if VexUI.IsMobile then
+        if RavineUI.IsMobile then
             tip.Visible = false
         end
         self:SelectTab(tab)
@@ -1929,7 +1929,7 @@ function Window:AddHomeTab(opts)
     local right = ColumnFrame(UDim2.new(0.5, 4, 0, 0))
 
     local hasDiscord = opts.Discord ~= nil and opts.Discord ~= ""
-    local cl = opts.Changelog or VexUI._LastChangelog
+    local cl = opts.Changelog or RavineUI._LastChangelog
     local hasChangelog = type(cl) == "table"
     local hasBottom = hasDiscord or hasChangelog
     local server = Card(left, hasBottom and UDim2.new(1, 0, 0.72, -4) or UDim2.new(1, 0, 1, 0), Theme.Card)
@@ -1952,7 +1952,7 @@ function Window:AddHomeTab(opts)
             game.PlaceId, game.JobId
         )
         local ok = Copy(code)
-        VexUI:Notify({
+        RavineUI:Notify({
             Title = ok and "Copied" or "Copy failed",
             Description = ok and "Join script copied to clipboard" or "Your executor has no clipboard function",
             Icon = ok and "copy" or "triangle-alert",
@@ -2036,7 +2036,7 @@ function Window:AddHomeTab(opts)
         Glow(cc, Theme.Accent, -45, 0.25)
 
         local count = type(cl.Entries) == "table" and #cl.Entries or 0
-        CardText(cc, "Changelog", "Version " .. tostring(cl.Version or VexUI.Version) .. " - " .. Plural(count, "change"), 19)
+        CardText(cc, "Changelog", "Version " .. tostring(cl.Version or RavineUI.Version) .. " - " .. Plural(count, "change"), 19)
 
         local cIcon = NewIcon(cc, "scroll-text", 18, Theme.Accent, "•")
         cIcon.Instance.Position = UDim2.new(1, -32, 0, 12)
@@ -2055,7 +2055,7 @@ function Window:AddHomeTab(opts)
                     data[k] = v
                 end
             end
-            VexUI:ShowChangelog(data)
+            RavineUI:ShowChangelog(data)
         end)
     end
 
@@ -2180,7 +2180,7 @@ function Window:AddHomeTab(opts)
 
     task.spawn(function()
         local n = 0
-        while self.Alive and not VexUI.Unloaded do
+        while self.Alive and not RavineUI.Unloaded do
             pcall(refreshLive)
             if n % 60 == 0 then
                 refreshFriends()
@@ -2203,8 +2203,8 @@ function Window:AddSettingsTab(opts)
     local tab = self:AddTab(opts.Name or "Settings", opts.Icon or "settings")
 
     local menu = tab:AddLeftGroupbox("Menu", "layout-dashboard")
-    if not VexUI.IsMobile then
-        local keybind = menu:AddKeyPicker("VexUI_MenuKey", {
+    if not RavineUI.IsMobile then
+        local keybind = menu:AddKeyPicker("RavineUI_MenuKey", {
             Text = "Menu keybind",
             Default = self.ToggleKeybind.Name,
         })
@@ -2220,7 +2220,7 @@ function Window:AddSettingsTab(opts)
 
     -- Scale wird erst angewendet, wenn der Slider kurz stillsteht (sonst springt die UI unter dem Finger)
     local scaleToken = 0
-    self._scaleSlider = menu:AddSlider("VexUI_Scale", {
+    self._scaleSlider = menu:AddSlider("RavineUI_Scale", {
         Text = "UI scale",
         Min = 40,
         Max = 200,
@@ -2241,13 +2241,13 @@ function Window:AddSettingsTab(opts)
     menu:AddButton("Unload UI", {
         Icon = "power",
         Callback = function()
-            VexUI:Unload()
+            RavineUI:Unload()
         end,
     })
 
     local cfg = tab:AddRightGroupbox("Config", "save")
-    local nameBox = cfg:AddTextbox("VexUI_ConfigName", { Text = "Config name", Placeholder = "default" })
-    local list = cfg:AddDropdown("VexUI_ConfigList", { Text = "Configs", Values = VexUI:ListConfigs() })
+    local nameBox = cfg:AddTextbox("RavineUI_ConfigName", { Text = "Config name", Placeholder = "default" })
+    local list = cfg:AddDropdown("RavineUI_ConfigList", { Text = "Configs", Values = RavineUI:ListConfigs() })
 
     local function currentName()
         local n = nameBox.Get()
@@ -2261,21 +2261,21 @@ function Window:AddSettingsTab(opts)
         Icon = "save",
         Callback = function()
             local n = currentName()
-            local ok, err = VexUI:SaveConfig(n)
-            VexUI:Notify({
+            local ok, err = RavineUI:SaveConfig(n)
+            RavineUI:Notify({
                 Title = ok and "Config saved" or "Save failed",
                 Description = ok and n or tostring(err),
                 Icon = ok and "circle-check" or "triangle-alert",
             })
-            list.Refresh(VexUI:ListConfigs())
+            list.Refresh(RavineUI:ListConfigs())
         end,
     })
     cfg:AddButton("Load config", {
         Icon = "folder",
         Callback = function()
             local n = currentName()
-            local ok, err = VexUI:LoadConfig(n)
-            VexUI:Notify({
+            local ok, err = RavineUI:LoadConfig(n)
+            RavineUI:Notify({
                 Title = ok and "Config loaded" or "Load failed",
                 Description = ok and n or tostring(err),
                 Icon = ok and "circle-check" or "triangle-alert",
@@ -2285,7 +2285,7 @@ function Window:AddSettingsTab(opts)
     cfg:AddButton("Refresh list", {
         Icon = "refresh-cw",
         Callback = function()
-            list.Refresh(VexUI:ListConfigs())
+            list.Refresh(RavineUI:ListConfigs())
         end,
     })
 
@@ -2516,7 +2516,7 @@ function Groupbox:AddButton(name, opts)
     end)
     btn.MouseButton1Click:Connect(function()
         task.spawn(callback)
-        if VexUI.IsMobile then
+        if RavineUI.IsMobile then
             task.delay(0.15, function()
                 pcall(function()
                     Tween(btn, 0.15, { BackgroundColor3 = Theme.Tertiary })
@@ -3237,4 +3237,4 @@ function Groupbox:AddKeyPicker(id, opts)
 end
 
 -- ============ INIT ============
-return VexUI
+return RavineUI
