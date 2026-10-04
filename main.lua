@@ -11,7 +11,7 @@ local VexUI = {
 }
 
 VexUI.__index = VexUI
-VexUI.Build = "resize-9"
+VexUI.Build = "resize-10"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -1461,19 +1461,27 @@ function VexUI:CreateWindow(opts)
         local EDGE = mobile and 12 or 8
         local CORNER = mobile and 30 or 22
 
-        local function applyDrag(mode, pos)
-            local center = main.AbsolutePosition + main.AbsoluteSize / 2
-            local hw, hh = size.X.Offset / 2, size.Y.Offset / 2
-            local dx, dy = math.abs(pos.X - center.X), math.abs(pos.Y - center.Y)
+        -- a = feste Kanten des Fensters beim Start des Ziehens (L = links, T = oben, R = rechts)
+        -- r/b/d: links und oben bleiben stehen, l: rechts und oben bleiben stehen
+        local function applyDrag(mode, pos, a)
+            local W, H = size.X.Offset, size.Y.Offset
             local s
-            if mode == "x" then
-                s = dx / hw
-            elseif mode == "y" then
-                s = dy / hh
+            if mode == "r" then
+                s = (pos.X - a.L) / W
+            elseif mode == "l" then
+                s = (a.R - pos.X) / W
+            elseif mode == "b" then
+                s = (pos.Y - a.T) / H
             else
-                s = math.sqrt(dx * dx + dy * dy) / math.sqrt(hw * hw + hh * hh)
+                s = ((pos.X - a.L) / W + (pos.Y - a.T) / H) / 2
             end
             s = math.clamp(s, 0.4, 2)
+
+            local cx = (mode == "l") and (a.R - s * W / 2) or (a.L + s * W / 2)
+            local cy = a.T + s * H / 2
+            local ps = gui.AbsoluteSize
+            main.Position = UDim2.fromScale(cx / ps.X, cy / ps.Y)
+
             windowObj.UserScale = s
             uiScale.Scale = s
         end
@@ -1518,17 +1526,15 @@ function VexUI:CreateWindow(opts)
                 end
             end
 
+            -- Kanten bleiben unsichtbar, nur die Punkte an der Ecke werden beim Anfassen heller
             local function setHot(on)
-                if isCorner then
-                    for _, d in ipairs(dots) do
-                        Tween(d, 0.12, { BackgroundColor3 = on and Theme.Accent or Theme.SubText })
-                    end
-                else
-                    Tween(h, 0.12, { BackgroundTransparency = on and 0.5 or 1 })
+                for _, d in ipairs(dots) do
+                    Tween(d, 0.12, { BackgroundColor3 = on and Theme.Text or Theme.SubText })
                 end
             end
 
             local dragging = false
+            local anchors
             h.MouseEnter:Connect(function()
                 if not dragging then
                     setHot(true)
@@ -1543,13 +1549,15 @@ function VexUI:CreateWindow(opts)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                     or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
+                    local p, sz = main.AbsolutePosition, main.AbsoluteSize
+                    anchors = { L = p.X, T = p.Y, R = p.X + sz.X }
                     setHot(true)
                 end
             end)
             Connect(UserInputService.InputChanged, function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                if dragging and anchors and (input.UserInputType == Enum.UserInputType.MouseMovement
                     or input.UserInputType == Enum.UserInputType.Touch) then
-                    applyDrag(mode, input.Position)
+                    applyDrag(mode, input.Position, anchors)
                 end
             end)
             Connect(UserInputService.InputEnded, function(input)
@@ -1564,9 +1572,9 @@ function VexUI:CreateWindow(opts)
         end
 
         -- Kanten (die Topbar bleibt frei, damit man das Fenster weiter verschieben kann)
-        Handle("Right", UDim2.new(1, -EDGE, 0, 46), UDim2.new(0, EDGE, 1, -46 - CORNER), "x", false)
-        Handle("Left", UDim2.new(0, 0, 0, 46), UDim2.new(0, EDGE, 1, -46 - EDGE), "x", false)
-        Handle("Bottom", UDim2.new(0, 0, 1, -EDGE), UDim2.new(1, -CORNER, 0, EDGE), "y", false)
+        Handle("Right", UDim2.new(1, -EDGE, 0, 46), UDim2.new(0, EDGE, 1, -46 - CORNER), "r", false)
+        Handle("Left", UDim2.new(0, 0, 0, 46), UDim2.new(0, EDGE, 1, -46 - EDGE), "l", false)
+        Handle("Bottom", UDim2.new(0, 0, 1, -EDGE), UDim2.new(1, -CORNER, 0, EDGE), "b", false)
         -- Ecke unten rechts (zuletzt erstellt, liegt oben)
         Handle("Corner", UDim2.new(1, -CORNER, 1, -CORNER), UDim2.fromOffset(CORNER, CORNER), "d", true)
     end
