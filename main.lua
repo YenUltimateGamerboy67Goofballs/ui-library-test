@@ -2,6 +2,16 @@
     RavineUI - Modern Dashboard UI Library
     Version 2.1
 
+    Mobile:
+        Handy wird automatisch erkannt und die UI automatisch kleiner skaliert.
+        local Window = RavineUI:CreateWindow({
+            Title = "Mein Script",
+            MobileScale = 0.7,   -- optional, kleiner = kleinere UI auf dem Handy (Standard 0.7)
+            -- Mobile = true,    -- optional: Mobile-Modus erzwingen (zum Testen am PC)
+        })
+        Die UI passt immer auf den Bildschirm: Resize und UI-scale-Slider sind auf die
+        Bildschirmgroesse begrenzt und das Fenster bleibt im sichtbaren Bereich.
+
     Dropdown mit Mehrfachauswahl:
         local dd = Box:AddDropdown("Targets", {
             Text = "Targets",
@@ -39,7 +49,7 @@ local RavineUI = {
 }
 
 RavineUI.__index = RavineUI
-RavineUI.Build = "resize-10-multi-disabled"
+RavineUI.Build = "resize-11-mobile-fit"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -54,6 +64,8 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Touch-Geraet ohne Tastatur = Mobile (kann in CreateWindow mit Mobile = true/false ueberschrieben werden)
 RavineUI.IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+-- Faktor, mit dem die UI auf dem Handy automatisch verkleinert wird
+RavineUI.MobileScale = 0.7
 
 local GENV = (getgenv and getgenv()) or _G
 if GENV.RavineUI_Instance and GENV.RavineUI_Instance.Unload then
@@ -739,7 +751,11 @@ function RavineUI:ShowChangelog(opts)
         end
         local vp = cam.ViewportSize
         local fit = math.min((vp.X - 24) / size.X.Offset, (vp.Y - 24) / size.Y.Offset)
-        return math.clamp(math.min(1, fit), 0.5, 2)
+        local s = math.min(1, fit)
+        if RavineUI.IsMobile then
+            s = s * (RavineUI.MobileScale or 0.7)
+        end
+        return math.clamp(s, 0.25, 2)
     end
     local targetScale = fitScale()
     uiScale.Scale = targetScale * 0.94
@@ -1347,31 +1363,34 @@ local function GetExecutorName()
 end
 
 -- ============ SCALE SPEICHERN ============
-local ScaleFile = "RavineUI/scale.txt"
+-- Handy und PC speichern getrennt, damit eine PC-Scale nie auf dem Handy landet
+local function ScaleFile(mobile)
+    return mobile and "RavineUI/scale_mobile.txt" or "RavineUI/scale.txt"
+end
 
-local function ReadSavedScale()
+local function ReadSavedScale(mobile)
     if not HasFS() then
         return nil
     end
     local ok, v = pcall(function()
-        if isfile(ScaleFile) then
-            return tonumber(readfile(ScaleFile))
+        if isfile(ScaleFile(mobile)) then
+            return tonumber(readfile(ScaleFile(mobile)))
         end
         return nil
     end)
     if ok and v then
-        return math.clamp(v, 0.4, 2)
+        return math.clamp(v, 0.25, 2)
     end
     return nil
 end
 
-local function WriteSavedScale(v)
+local function WriteSavedScale(v, mobile)
     if not HasFS() then
         return
     end
     pcall(function()
         EnsureFolders()
-        writefile(ScaleFile, tostring(v))
+        writefile(ScaleFile(mobile), tostring(v))
     end)
 end
 
@@ -1385,8 +1404,9 @@ function RavineUI:CreateWindow(opts)
         mobile = RavineUI.IsMobile
     end
     RavineUI.IsMobile = mobile
+    RavineUI.MobileScale = opts.MobileScale or 0.7 -- Faktor nur fuer Handy-Nutzer
     local size = opts.Size or (mobile and UDim2.fromOffset(600, 380) or UDim2.fromOffset(700, 430))
-    local savedScale = ReadSavedScale()
+    local savedScale = ReadSavedScale(mobile)
     local gui = EnsureGui()
 
     local main = Create("Frame", {
@@ -1594,18 +1614,41 @@ function RavineUI:CreateWindow(opts)
     windowObj.TitleHolder = titleHolder
     windowObj._logoX = logoX
 
+    -- Haelt das Fenster komplett im sichtbaren Bereich
+    local function clampToScreen()
+        local ps = gui.AbsoluteSize
+        if ps.X <= 0 or ps.Y <= 0 then
+            return
+        end
+        local w = size.X.Offset * uiScale.Scale
+        local h = (windowObj.Minimized and 46 or size.Y.Offset) * uiScale.Scale
+        local cx = main.Position.X.Scale * ps.X + main.Position.X.Offset
+        local cy = main.Position.Y.Scale * ps.Y + main.Position.Y.Offset
+        cx = math.clamp(cx, w / 2, math.max(ps.X - w / 2, w / 2))
+        cy = math.clamp(cy, h / 2, math.max(ps.Y - h / 2, h / 2))
+        main.Position = UDim2.fromScale(cx / ps.X, cy / ps.Y)
+    end
+
     local function updateScale()
         local cam = workspace.CurrentCamera
         if not cam then
             return
         end
-        if windowObj.UserScale then
-            uiScale.Scale = math.clamp(windowObj.UserScale, 0.4, 2)
-            return
-        end
         local vp = cam.ViewportSize
         local fit = math.min((vp.X - 24) / math.max(size.X.Offset, 1), (vp.Y - 24) / math.max(size.Y.Offset, 1))
-        uiScale.Scale = math.clamp(math.min(opts.Scale or 1, fit), 0.4, 2)
+        local maxScale = math.clamp(fit, 0.25, 2) -- groesser als der Bildschirm geht nie
+
+        local s
+        if windowObj.UserScale then
+            s = math.min(windowObj.UserScale, maxScale)
+        else
+            s = math.min(opts.Scale or 1, fit)
+            if mobile then
+                s = s * RavineUI.MobileScale
+            end
+        end
+        uiScale.Scale = math.clamp(s, 0.25, 2)
+        clampToScreen()
     end
     windowObj._updateScale = updateScale
     updateScale()
@@ -1645,6 +1688,7 @@ function RavineUI:CreateWindow(opts)
         -- r/b/d: links und oben bleiben stehen, l: rechts und oben bleiben stehen
         local function applyDrag(mode, pos, a)
             local W, H = size.X.Offset, size.Y.Offset
+            local ps = gui.AbsoluteSize
             local s
             if mode == "r" then
                 s = (pos.X - a.L) / W
@@ -1655,11 +1699,18 @@ function RavineUI:CreateWindow(opts)
             else
                 s = ((pos.X - a.L) / W + (pos.Y - a.T) / H) / 2
             end
-            s = math.clamp(s, 0.4, 2)
+
+            -- nie groesser als der Bildschirm
+            local maxS = math.clamp(math.min((ps.X - 24) / W, (ps.Y - 24) / H), 0.25, 2)
+            s = math.clamp(s, 0.25, maxS)
 
             local cx = (mode == "l") and (a.R - s * W / 2) or (a.L + s * W / 2)
             local cy = a.T + s * H / 2
-            local ps = gui.AbsoluteSize
+
+            -- Fenster bleibt komplett im Bild
+            local hw, hh = s * W / 2, s * H / 2
+            cx = math.clamp(cx, hw, math.max(ps.X - hw, hw))
+            cy = math.clamp(cy, hh, math.max(ps.Y - hh, hh))
             main.Position = UDim2.fromScale(cx / ps.X, cy / ps.Y)
 
             windowObj.UserScale = s
@@ -1844,10 +1895,11 @@ function Window:SetLogoSize(px)
     self.TitleHolder.Size = UDim2.new(1, -(titleX + 122), 1, 0)
 end
 
--- Skaliert die ganze UI. scale = 1 ist normal, nil = automatisch an den Bildschirm anpassen
+-- Skaliert die ganze UI. scale = 1 ist normal, nil = automatisch an den Bildschirm anpassen.
+-- Die Scale wird immer auf "passt in den Bildschirm" begrenzt.
 function Window:SetScale(scale, save)
     if scale then
-        self.UserScale = math.clamp(tonumber(scale) or 1, 0.4, 2)
+        self.UserScale = math.clamp(tonumber(scale) or 1, 0.25, 2)
     else
         self.UserScale = nil
     end
@@ -1855,12 +1907,25 @@ function Window:SetScale(scale, save)
         self._updateScale()
     end
     if save and self.UserScale then
-        WriteSavedScale(self.UserScale)
+        WriteSavedScale(self.Scale.Scale, RavineUI.IsMobile)
     end
 end
 
 function Window:GetScale()
     return self.Scale.Scale
+end
+
+-- Groesste Scale, bei der das Fenster noch komplett auf den Bildschirm passt
+function Window:GetMaxScale()
+    local ps = self.Gui.AbsoluteSize
+    if ps.X <= 0 or ps.Y <= 0 then
+        local cam = workspace.CurrentCamera
+        ps = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+    end
+    return math.clamp(
+        math.min((ps.X - 24) / math.max(self.Size.X.Offset, 1), (ps.Y - 24) / math.max(self.Size.Y.Offset, 1)),
+        0.25, 2
+    )
 end
 
 function Window:Notify(opts)
@@ -2387,11 +2452,12 @@ function Window:AddSettingsTab(opts)
     end
 
     -- Scale wird erst angewendet, wenn der Slider kurz stillsteht (sonst springt die UI unter dem Finger)
+    -- Das Maximum passt sich dem Geraet an: groesser als der Bildschirm geht nie
     local scaleToken = 0
     self._scaleSlider = menu:AddSlider("RavineUI_Scale", {
         Text = "UI scale",
         Min = 40,
-        Max = 200,
+        Max = math.max(50, math.min(200, math.floor(self:GetMaxScale() * 100))),
         Default = math.floor(self.Scale.Scale * 100 + 0.5),
         Rounding = 0,
         Suffix = "%",
