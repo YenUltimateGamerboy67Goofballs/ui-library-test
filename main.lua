@@ -1,6 +1,25 @@
 --[[
     RavineUI - Modern Dashboard UI Library
-    Version 2.1
+    Version 2.2
+
+    THEME SYSTEM (live, alles wird sofort umgefaerbt):
+        RavineUI:SetTheme("Ocean")                 -- Preset: Crimson, Ocean, Violet, Emerald, Amber, Rose, Cyan, Orange
+        RavineUI:SetAccent(Color3.fromRGB(255, 80, 0))
+        RavineUI:SetRainbow(true, 0.15)            -- Rainbow-Akzent (Speed = Zyklen pro Sekunde)
+        RavineUI:AddThemePreset("Mint", Color3.fromRGB(60, 220, 170))
+        RavineUI:OnThemeChanged(function() ... end)
+        Window:SetTransparency(0.1)                -- Fenster-Transparenz (0 bis 0.7)
+        Beim Erstellen: CreateWindow({ ThemePreset = "Violet" })  oder  CreateWindow({ Accent = Color3.fromRGB(...) })
+        Die Auswahl der User (Settings > Appearance) wird in RavineUI/theme.json gespeichert und gewinnt gegen
+        ThemePreset/Accent. Mit IgnoreSavedTheme = true wird die gespeicherte Auswahl ignoriert.
+
+    SEARCH BAR:
+        Lupe oben in der Titelleiste (oder Strg+F am PC). Durchsucht alle Tabs und alle Elemente,
+        Klick auf ein Ergebnis springt zum Tab, scrollt zum Element und laesst es aufleuchten.
+        Box:AddToggle("X", { Text = "Auto Farm", Keywords = "grind xp level" })   -- zusaetzliche Suchbegriffe
+        Box:AddToggle("X", { Text = "Geheim", Searchable = false })               -- nicht auffindbar
+        Window:OpenSearch("farm")  Window:CloseSearch()  Window:ToggleSearch()
+        CreateWindow({ Search = false })                                          -- Suche komplett aus
 
     Mobile:
         Handy wird automatisch erkannt und die UI automatisch kleiner skaliert.
@@ -42,14 +61,14 @@
 ]]
 
 local RavineUI = {
-    Version = "2.1.0",
+    Version = "2.2.0",
     Toggles = {},
     Options = {},
     CustomIcons = {},
 }
 
 RavineUI.__index = RavineUI
-RavineUI.Build = "resize-11-mobile-fit"
+RavineUI.Build = "theme-search-12"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -104,6 +123,46 @@ local Theme = {
 }
 RavineUI.Theme = Theme
 
+-- Aktueller Zustand der Theme-Auswahl (wird in RavineUI/theme.json gespeichert)
+RavineUI.ThemeState = {
+    Preset = "Crimson",
+    Accent = Theme.Accent,
+    Rainbow = false,
+    RainbowSpeed = 0.15,
+    Transparency = 0.04,
+}
+
+-- Jedes Element, dessen Farbe beim Erstellen einer Theme-Farbe entspricht, wird hier (schwach) vermerkt.
+-- Beim Theme-Wechsel werden diese Elemente live umgefaerbt. Schwache Keys = zerstoerte Elemente verschwinden von selbst.
+local ThemeBinds = setmetatable({}, { __mode = "k" })
+local ThemeHooks = {}
+local ThemedProps = {
+    BackgroundColor3 = true,
+    TextColor3 = true,
+    ImageColor3 = true,
+    BorderColor3 = true,
+    Color = true,
+    ScrollBarImageColor3 = true,
+    PlaceholderColor3 = true,
+}
+
+local function BindTheme(inst, prop, value)
+    if typeof(value) ~= "Color3" then
+        return
+    end
+    for key, c in pairs(Theme) do
+        if typeof(c) == "Color3" and c == value then
+            local list = ThemeBinds[inst]
+            if not list then
+                list = {}
+                ThemeBinds[inst] = list
+            end
+            table.insert(list, { prop, key })
+            return
+        end
+    end
+end
+
 -- ============ UTILITIES ============
 local Connections = {}
 
@@ -113,7 +172,8 @@ local function Connect(signal, fn)
     return c
 end
 
-local function Create(className, props)
+-- noTheme = true: Farben dieses Elements werden NIE vom Theme umgefaerbt (z. B. Farbwaehler-Vorschau)
+local function Create(className, props, noTheme)
     local inst = Instance.new(className)
     local parent
     for k, v in pairs(props or {}) do
@@ -121,6 +181,9 @@ local function Create(className, props)
             parent = v
         else
             inst[k] = v
+            if not noTheme and ThemedProps[k] then
+                BindTheme(inst, k, v)
+            end
         end
     end
     if parent then
@@ -191,6 +254,10 @@ end
 local function Round(v, decimals)
     local m = 10 ^ (decimals or 0)
     return math.floor(v * m + 0.5) / m
+end
+
+local function ScaleColor(c, f)
+    return Color3.new(math.clamp(c.R * f, 0, 1), math.clamp(c.G * f, 0, 1), math.clamp(c.B * f, 0, 1))
 end
 
 -- Erlaubt sowohl obj.Set(x) als auch obj:Set(x) (bei ":" wird obj selbst als erstes Argument uebergeben)
@@ -735,7 +802,7 @@ function RavineUI:ShowChangelog(opts)
         Position = UDim2.fromScale(0.5, 0.5),
         Size = size,
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.04,
+        BackgroundTransparency = RavineUI.ThemeState.Transparency,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Parent = gui,
@@ -1157,6 +1224,8 @@ function RavineUI:Unload()
         end)
     end
     table.clear(Connections)
+    self._rainbowConn = nil
+    table.clear(ThemeHooks)
     if self.Gui then
         self.Gui:Destroy()
     end
@@ -1394,6 +1463,566 @@ local function WriteSavedScale(v, mobile)
     end)
 end
 
+-- ============ THEME SYSTEM ============
+local Presets = {
+    { Name = "Crimson", Color = Color3.fromRGB(200, 30, 40) },
+    { Name = "Ocean", Color = Color3.fromRGB(37, 124, 235) },
+    { Name = "Violet", Color = Color3.fromRGB(139, 92, 246) },
+    { Name = "Emerald", Color = Color3.fromRGB(34, 180, 95) },
+    { Name = "Amber", Color = Color3.fromRGB(235, 150, 20) },
+    { Name = "Rose", Color = Color3.fromRGB(236, 64, 140) },
+    { Name = "Cyan", Color = Color3.fromRGB(8, 170, 200) },
+    { Name = "Orange", Color = Color3.fromRGB(240, 105, 30) },
+}
+
+local function NearColor(a, b, tol)
+    return math.abs(a.R - b.R) <= tol and math.abs(a.G - b.G) <= tol and math.abs(a.B - b.B) <= tol
+end
+
+-- Setzt neue Theme-Farben und faerbt alle gebundenen Elemente um, die gerade noch die alte Farbe haben.
+-- (Ein Toggle, der gerade "aus" ist, hat z. B. ToggleOff-Farbe und wird deshalb nicht angefasst.)
+local function ApplyColors(new, tol)
+    local old = {}
+    for k, v in pairs(new) do
+        old[k] = Theme[k]
+        Theme[k] = v
+    end
+    tol = tol or (RavineUI.ThemeState.Rainbow and 0.15 or 0.004)
+    for inst, list in pairs(ThemeBinds) do
+        for _, b in ipairs(list) do
+            local key = b[2]
+            local o, n = old[key], new[key]
+            if o and n and NearColor(inst[b[1]], o, tol) then
+                inst[b[1]] = n
+            end
+        end
+    end
+    for _, fn in ipairs(ThemeHooks) do
+        pcall(fn)
+    end
+end
+
+local function DarkenColor(c, f)
+    local h, s, v = Color3.toHSV(c)
+    return Color3.fromHSV(h, s, v * f)
+end
+
+function RavineUI:SetAccent(color, fromRainbow, tolOverride)
+    if typeof(color) ~= "Color3" then
+        return
+    end
+    if not fromRainbow then
+        self.ThemeState.Accent = color
+    end
+    ApplyColors({
+        Accent = color,
+        ToggleOn = color,
+        AccentDark = DarkenColor(color, 0.7),
+    }, tolOverride)
+end
+
+function RavineUI:SetTheme(name)
+    for _, p in ipairs(Presets) do
+        if p.Name == name then
+            self.ThemeState.Preset = p.Name
+            self:SetAccent(p.Color)
+            return true
+        end
+    end
+    return false
+end
+
+function RavineUI:GetThemeNames()
+    local out = {}
+    for _, p in ipairs(Presets) do
+        table.insert(out, p.Name)
+    end
+    return out
+end
+
+function RavineUI:AddThemePreset(name, color)
+    if type(name) ~= "string" or typeof(color) ~= "Color3" then
+        return
+    end
+    for _, p in ipairs(Presets) do
+        if p.Name == name then
+            p.Color = color
+            return
+        end
+    end
+    table.insert(Presets, { Name = name, Color = color })
+end
+
+function RavineUI:OnThemeChanged(fn)
+    if type(fn) == "function" then
+        table.insert(ThemeHooks, fn)
+    end
+end
+
+-- Rainbow-Akzent. speed = Farbzyklen pro Sekunde (0.02 bis 1)
+function RavineUI:SetRainbow(on, speed, silent)
+    local ts = self.ThemeState
+    if speed then
+        ts.RainbowSpeed = math.clamp(tonumber(speed) or 0.15, 0.02, 1)
+    end
+    ts.Rainbow = on and true or false
+    if self._rainbowConn then
+        self._rainbowConn:Disconnect()
+        self._rainbowConn = nil
+    end
+    if ts.Rainbow then
+        local last = 0
+        self._rainbowConn = Connect(RunService.Heartbeat, function()
+            local now = os.clock()
+            if now - last < 0.04 then
+                return
+            end
+            last = now
+            self:SetAccent(Color3.fromHSV((now * ts.RainbowSpeed) % 1, 0.85, 0.95), true)
+        end)
+    else
+        -- zurueck zur gewaehlten Akzentfarbe (grosse Toleranz, weil Tweens noch laufen koennen)
+        self:SetAccent(ts.Accent, false, 0.15)
+    end
+    if not silent then
+        self:_QueueThemeSave()
+    end
+end
+
+-- ---- Speichern / Laden (RavineUI/theme.json) ----
+local ThemeFile = "RavineUI/theme.json"
+
+local function ReadSavedTheme()
+    if not HasFS() then
+        return nil
+    end
+    local ok, data = pcall(function()
+        if isfile(ThemeFile) then
+            return HttpService:JSONDecode(readfile(ThemeFile))
+        end
+        return nil
+    end)
+    if ok and type(data) == "table" then
+        return data
+    end
+    return nil
+end
+
+function RavineUI:SaveTheme()
+    if not HasFS() then
+        return false
+    end
+    local ts = self.ThemeState
+    local a = ts.Accent
+    pcall(function()
+        EnsureFolders()
+        writefile(ThemeFile, HttpService:JSONEncode({
+            Preset = ts.Preset,
+            Accent = {
+                math.floor(a.R * 255 + 0.5),
+                math.floor(a.G * 255 + 0.5),
+                math.floor(a.B * 255 + 0.5),
+            },
+            Rainbow = ts.Rainbow,
+            RainbowSpeed = ts.RainbowSpeed,
+            Transparency = ts.Transparency,
+        }))
+    end)
+    return true
+end
+
+-- Speichert erst, wenn eine halbe Sekunde nichts mehr geaendert wurde (Slider/Farbwaehler feuern sehr oft)
+function RavineUI:_QueueThemeSave()
+    self._themeSaveToken = (self._themeSaveToken or 0) + 1
+    local token = self._themeSaveToken
+    task.delay(0.6, function()
+        if token == self._themeSaveToken and not self.Unloaded then
+            self:SaveTheme()
+        end
+    end)
+end
+
+function RavineUI:_InitTheme(opts)
+    local ts = self.ThemeState
+    if typeof(opts.Accent) == "Color3" then
+        ts.Preset = "Custom"
+        self:SetAccent(opts.Accent)
+    elseif opts.ThemePreset then
+        self:SetTheme(opts.ThemePreset)
+    end
+    if opts.Transparency then
+        ts.Transparency = math.clamp(tonumber(opts.Transparency) or 0.04, 0, 0.7)
+    end
+
+    if opts.IgnoreSavedTheme then
+        return
+    end
+    local saved = ReadSavedTheme()
+    if not saved then
+        return
+    end
+    local a = saved.Accent
+    if type(a) == "table" and #a >= 3 then
+        local function ch(x)
+            return math.clamp(tonumber(x) or 0, 0, 255)
+        end
+        self:SetAccent(Color3.fromRGB(ch(a[1]), ch(a[2]), ch(a[3])))
+        ts.Preset = type(saved.Preset) == "string" and saved.Preset or "Custom"
+    end
+    if saved.RainbowSpeed then
+        ts.RainbowSpeed = math.clamp(tonumber(saved.RainbowSpeed) or ts.RainbowSpeed, 0.02, 1)
+    end
+    if saved.Transparency then
+        ts.Transparency = math.clamp(tonumber(saved.Transparency) or ts.Transparency, 0, 0.7)
+    end
+    if saved.Rainbow == true then
+        self:SetRainbow(true, nil, true)
+    end
+end
+
+-- ============ SEARCH ============
+local SearchTypeIcons = {
+    Toggle = "toggle-right",
+    Slider = "sliders-horizontal",
+    Dropdown = "list",
+    Textbox = "type",
+    ColorPicker = "palette",
+    KeyPicker = "keyboard",
+    Button = "mouse-pointer-click",
+    Tab = "layout-dashboard",
+}
+
+-- Baut das Such-Panel (schwebt ueber dem Inhalt) und gibt eine kleine API zurueck
+local function BuildSearch(win, main, onState)
+    local entries = {}
+    local shown = {}
+    local api = { Entries = entries, IsOpen = false }
+
+    local panel = Create("Frame", {
+        Name = "SearchPanel",
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 68, 0, 54),
+        Size = UDim2.new(1, -76, 1, -62),
+        Visible = false,
+        Active = true,
+        ZIndex = 60,
+        Parent = main,
+    })
+    Corner(panel, 10)
+    Stroke(panel, Theme.Border, 1)
+
+    local inputRow = Create("Frame", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 38),
+        Parent = panel,
+    })
+    Corner(inputRow, 8)
+    local inputStroke = Stroke(inputRow, Theme.Border, 1)
+
+    local sIcon = NewIcon(inputRow, "search", 16, Theme.SubText, "?")
+    sIcon.Instance.AnchorPoint = Vector2.new(0, 0.5)
+    sIcon.Instance.Position = UDim2.new(0, 12, 0.5, 0)
+
+    local box = Create("TextBox", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 38, 0, 0),
+        Size = UDim2.new(1, -76, 1, 0),
+        Font = Theme.Font,
+        Text = "",
+        PlaceholderText = "Search all options...",
+        PlaceholderColor3 = Theme.SubText,
+        TextColor3 = Theme.Text,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+        Parent = inputRow,
+    })
+
+    local clearBtn = Create("TextButton", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -6, 0.5, 0),
+        Size = UDim2.fromOffset(26, 26),
+        Text = "",
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = inputRow,
+    })
+    local clearIcon = NewIcon(clearBtn, "x", 14, Theme.SubText, "x")
+    clearIcon.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    clearIcon.Instance.Position = UDim2.fromScale(0.5, 0.5)
+    clearBtn.MouseEnter:Connect(function()
+        TintIcon(clearIcon, Theme.Text)
+    end)
+    clearBtn.MouseLeave:Connect(function()
+        TintIcon(clearIcon, Theme.SubText)
+    end)
+
+    local info = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 12, 0, 52),
+        Size = UDim2.new(1, -24, 0, 16),
+        Font = Theme.Font,
+        Text = "",
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = panel,
+    })
+
+    local results = Create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 10, 0, 74),
+        Size = UDim2.new(1, -20, 1, -84),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Border,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Parent = panel,
+    })
+    Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+        Parent = results,
+    })
+    Create("UIPadding", { PaddingRight = UDim.new(0, 4), Parent = results })
+
+    local empty = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 16, 0, 96),
+        Size = UDim2.new(1, -32, 0, 40),
+        Font = Theme.Font,
+        Text = "",
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        TextWrapped = true,
+        Parent = panel,
+    })
+
+    -- Scrollt die Spalte zum Element und laesst es kurz aufleuchten
+    local function reveal(e)
+        local frame, col = e.Frame, e.Column
+        if not (frame and frame.Parent and col and col.Parent) then
+            return
+        end
+        local scale = math.max(win.Scale.Scale, 0.01)
+        local rel = (frame.AbsolutePosition.Y - col.AbsolutePosition.Y) / scale
+        local maxY = math.max((col.AbsoluteCanvasSize.Y - col.AbsoluteWindowSize.Y) / scale, 0)
+        local target = math.clamp(col.CanvasPosition.Y + rel - 50, 0, maxY)
+        Tween(col, 0.25, { CanvasPosition = Vector2.new(0, target) })
+
+        local stroke = frame:FindFirstChildOfClass("UIStroke")
+        if stroke then
+            task.spawn(function()
+                pcall(function()
+                    for _ = 1, 2 do
+                        Tween(stroke, 0.18, { Color = Theme.Accent, Thickness = 2 })
+                        task.wait(0.3)
+                        Tween(stroke, 0.25, { Color = Theme.Border, Thickness = 1 })
+                        task.wait(0.35)
+                    end
+                end)
+            end)
+        end
+    end
+
+    local function jump(e)
+        api.SetOpen(false)
+        win:SelectTab(e.Tab)
+        if e.Frame then
+            task.delay(0.1, function()
+                reveal(e)
+            end)
+        end
+    end
+
+    local function makeRow(e, order)
+        local btn = Create("TextButton", {
+            BackgroundColor3 = Theme.Tertiary,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, -4, 0, 44),
+            LayoutOrder = order,
+            Text = "",
+            AutoButtonColor = false,
+            Parent = results,
+        })
+        Corner(btn, 8)
+        local st = Stroke(btn, Theme.Border, 1)
+
+        local ic = NewIcon(btn, SearchTypeIcons[e.Type] or "search", 16, Theme.Accent, "•")
+        ic.Instance.AnchorPoint = Vector2.new(0, 0.5)
+        ic.Instance.Position = UDim2.new(0, 12, 0.5, 0)
+
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 38, 0, 6),
+            Size = UDim2.new(1, -50, 0, 18),
+            Font = Theme.FontBold,
+            Text = e.Name,
+            TextColor3 = Theme.Text,
+            TextSize = 13,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = btn,
+        })
+
+        local sub
+        if e.Type == "Tab" then
+            sub = "Tab"
+        else
+            sub = (e.Tab and e.Tab.Name or "") .. " / " .. tostring(e.Group or "")
+        end
+        if e.Obj and e.Obj.Disabled then
+            sub = sub .. "  -  locked"
+        end
+        Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 38, 0, 24),
+            Size = UDim2.new(1, -50, 0, 14),
+            Font = Theme.Font,
+            Text = sub,
+            TextColor3 = Theme.SubText,
+            TextSize = 11,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = btn,
+        })
+
+        btn.MouseEnter:Connect(function()
+            Tween(st, 0.12, { Color = Theme.Accent })
+        end)
+        btn.MouseLeave:Connect(function()
+            Tween(st, 0.12, { Color = Theme.Border })
+        end)
+        btn.MouseButton1Click:Connect(function()
+            jump(e)
+        end)
+    end
+
+    local function render(query)
+        for _, c in ipairs(results:GetChildren()) do
+            if c:IsA("TextButton") then
+                c:Destroy()
+            end
+        end
+        shown = {}
+
+        local tokens = {}
+        for t in query:lower():gmatch("%S+") do
+            table.insert(tokens, t)
+        end
+
+        if #tokens == 0 then
+            info.Text = Plural(#entries, "option") .. " searchable"
+            empty.Text = "Type to search every option across all tabs"
+            empty.Visible = true
+            return
+        end
+
+        local scored = {}
+        for _, e in ipairs(entries) do
+            local score = 0
+            for _, t in ipairs(tokens) do
+                local i = e.Lower:find(t, 1, true)
+                if i then
+                    score = score + (i == 1 and 3 or 2)
+                elseif e.Blob:find(t, 1, true) then
+                    score = score + 1
+                else
+                    score = 0
+                    break
+                end
+            end
+            if score > 0 then
+                table.insert(scored, { s = score, e = e })
+            end
+        end
+        table.sort(scored, function(a, b)
+            if a.s ~= b.s then
+                return a.s > b.s
+            end
+            return a.e.Lower < b.e.Lower
+        end)
+
+        for i = 1, math.min(#scored, 40) do
+            shown[i] = scored[i].e
+            makeRow(scored[i].e, i)
+        end
+
+        info.Text = Plural(#shown, "result") .. (#scored > #shown and " (showing first 40)" or "")
+        empty.Visible = #shown == 0
+        if #shown == 0 then
+            empty.Text = 'No results for "' .. query .. '"'
+        end
+    end
+
+    box:GetPropertyChangedSignal("Text"):Connect(function()
+        clearBtn.Visible = box.Text ~= ""
+        render(box.Text)
+    end)
+    box.Focused:Connect(function()
+        Tween(inputStroke, 0.15, { Color = Theme.Accent })
+    end)
+    box.FocusLost:Connect(function(enterPressed, input)
+        Tween(inputStroke, 0.15, { Color = Theme.Border })
+        if input and input.KeyCode == Enum.KeyCode.Escape then
+            api.SetOpen(false)
+        elseif enterPressed and shown[1] then
+            jump(shown[1])
+        end
+    end)
+    clearBtn.MouseButton1Click:Connect(function()
+        box.Text = ""
+        box:CaptureFocus()
+    end)
+
+    function api.SetOpen(v, query)
+        v = v and true or false
+        if v == api.IsOpen then
+            if v and query then
+                box.Text = query
+            end
+            return
+        end
+        api.IsOpen = v
+        TipHide()
+        panel.Visible = v
+        if v then
+            box.Text = query or ""
+            render(box.Text)
+            -- kurz warten, sonst landet die Taste, die die Suche geoeffnet hat (Strg+F), im Textfeld
+            task.delay(0.05, function()
+                if api.IsOpen then
+                    box:CaptureFocus()
+                end
+            end)
+        else
+            pcall(function()
+                box:ReleaseFocus()
+            end)
+        end
+        if onState then
+            onState(v)
+        end
+    end
+
+    function api.Add(e)
+        e.Name = tostring(e.Name or "?")
+        e.Type = e.Type or "Option"
+        e.Lower = e.Name:lower()
+        e.Blob = (e.Name .. " " .. (e.Tab and e.Tab.Name or "") .. " " .. tostring(e.Group or "")
+            .. " " .. e.Type .. " " .. tostring(e.Keywords or "")):lower()
+        table.insert(entries, e)
+    end
+
+    return api
+end
+
 -- ============ WINDOW ============
 function RavineUI:CreateWindow(opts)
     opts = opts or {}
@@ -1405,6 +2034,7 @@ function RavineUI:CreateWindow(opts)
     end
     RavineUI.IsMobile = mobile
     RavineUI.MobileScale = opts.MobileScale or 0.7 -- Faktor nur fuer Handy-Nutzer
+    RavineUI:_InitTheme(opts)
     local size = opts.Size or (mobile and UDim2.fromOffset(600, 380) or UDim2.fromOffset(700, 430))
     local savedScale = ReadSavedScale(mobile)
     local gui = EnsureGui()
@@ -1415,7 +2045,7 @@ function RavineUI:CreateWindow(opts)
         Position = UDim2.fromScale(0.5, 0.5),
         Size = size,
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = opts.Transparency or 0.04,
+        BackgroundTransparency = RavineUI.ThemeState.Transparency,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Parent = gui,
@@ -1448,10 +2078,13 @@ function RavineUI:CreateWindow(opts)
     logo.Instance.Position = UDim2.new(0, logoX, 0.5, 0)
     local titleX = logoX + logoPx + 10
 
+    -- Platz rechts fuer die Topbar-Buttons (mit Lupe 3 Buttons, ohne 2)
+    local reserve = (opts.Search ~= false) and 158 or 122
+
     local titleHolder = Create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, titleX, 0, 0),
-        Size = UDim2.new(1, -(titleX + 122), 1, 0),
+        Size = UDim2.new(1, -(titleX + reserve), 1, 0),
         Parent = topBar,
     })
     Create("UIListLayout", {
@@ -1501,7 +2134,9 @@ function RavineUI:CreateWindow(opts)
         Parent = btnHolder,
     })
 
+    -- Gibt den Button und eine kleine API (SetActive faerbt den Button dauerhaft in der Akzentfarbe) zurueck
     local function TopButton(order, icon, fallback)
+        local active = false
         local b = Create("TextButton", {
             BackgroundColor3 = Theme.Tertiary,
             BorderSizePixel = 0,
@@ -1521,14 +2156,25 @@ function RavineUI:CreateWindow(opts)
             Tween(s, 0.15, { Color = Theme.Accent })
         end)
         b.MouseLeave:Connect(function()
-            TintIcon(ic, Theme.SubText)
-            Tween(s, 0.15, { Color = Theme.Border })
+            TintIcon(ic, active and Theme.Accent or Theme.SubText)
+            Tween(s, 0.15, { Color = active and Theme.Accent or Theme.Border })
         end)
-        return b
+        local api = {
+            SetActive = function(v)
+                active = v and true or false
+                TintIcon(ic, active and Theme.Accent or Theme.SubText)
+                Tween(s, 0.15, { Color = active and Theme.Accent or Theme.Border })
+            end,
+        }
+        return b, api
     end
 
-    local minBtn = TopButton(1, "minus", "-")
-    local closeBtn = TopButton(2, "x", "x")
+    local searchBtn, searchApi
+    if opts.Search ~= false then
+        searchBtn, searchApi = TopButton(1, "search", "S")
+    end
+    local minBtn = TopButton(2, "minus", "-")
+    local closeBtn = TopButton(3, "x", "x")
 
     local body = Create("Frame", {
         Name = "Body",
@@ -1613,6 +2259,17 @@ function RavineUI:CreateWindow(opts)
     windowObj.Logo = logo
     windowObj.TitleHolder = titleHolder
     windowObj._logoX = logoX
+    windowObj._reserve = reserve
+
+    -- Suche (vor den Tabs bauen, damit jeder Tab und jedes Element sich registrieren kann)
+    if searchBtn then
+        windowObj._search = BuildSearch(windowObj, main, function(v)
+            searchApi.SetActive(v)
+        end)
+        searchBtn.MouseButton1Click:Connect(function()
+            windowObj:ToggleSearch()
+        end)
+    end
 
     -- Haelt das Fenster komplett im sichtbaren Bereich
     local function clampToScreen()
@@ -1817,10 +2474,12 @@ function RavineUI:CreateWindow(opts)
     end)
 
     closeBtn.MouseButton1Click:Connect(function()
+        windowObj:CloseSearch()
         main.Visible = false
     end)
 
     minBtn.MouseButton1Click:Connect(function()
+        windowObj:CloseSearch()
         windowObj.Minimized = not windowObj.Minimized
         if windowObj.Minimized then
             Tween(main, 0.2, { Size = UDim2.new(size.X.Scale, size.X.Offset, 0, 46) })
@@ -1847,6 +2506,11 @@ function RavineUI:CreateWindow(opts)
         end
         if input.KeyCode == windowObj.ToggleKeybind then
             windowObj:Toggle()
+        end
+        -- Strg+F oeffnet die Suche (nur Linke Strg-Taste, Rechte Strg ist standardmaessig der Menue-Toggle)
+        if input.KeyCode == Enum.KeyCode.F and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+            and main.Visible and windowObj._search then
+            windowObj:ToggleSearch()
         end
     end)
 
@@ -1883,6 +2547,9 @@ end
 
 function Window:Toggle()
     TipHide()
+    if self.Main.Visible then
+        self:CloseSearch()
+    end
     self.Main.Visible = not self.Main.Visible
 end
 
@@ -1892,7 +2559,7 @@ function Window:SetLogoSize(px)
     inst.Size = UDim2.fromOffset(px, px)
     local titleX = self._logoX + px + 10
     self.TitleHolder.Position = UDim2.new(0, titleX, 0, 0)
-    self.TitleHolder.Size = UDim2.new(1, -(titleX + 122), 1, 0)
+    self.TitleHolder.Size = UDim2.new(1, -(titleX + (self._reserve or 122)), 1, 0)
 end
 
 -- Skaliert die ganze UI. scale = 1 ist normal, nil = automatisch an den Bildschirm anpassen.
@@ -1926,6 +2593,44 @@ function Window:GetMaxScale()
         math.min((ps.X - 24) / math.max(self.Size.X.Offset, 1), (ps.Y - 24) / math.max(self.Size.Y.Offset, 1)),
         0.25, 2
     )
+end
+
+-- Fenster-Transparenz (0 = voll sichtbar, 0.7 = sehr durchsichtig)
+function Window:SetTransparency(t)
+    t = math.clamp(tonumber(t) or 0.04, 0, 0.7)
+    RavineUI.ThemeState.Transparency = t
+    self.Main.BackgroundTransparency = t
+    RavineUI:_QueueThemeSave()
+end
+
+-- ---- Suche ----
+function Window:OpenSearch(query)
+    if self._search and not self.Minimized then
+        self._search.SetOpen(true, query)
+    end
+end
+
+function Window:CloseSearch()
+    if self._search then
+        self._search.SetOpen(false)
+    end
+end
+
+function Window:ToggleSearch()
+    if self._search and not self.Minimized then
+        self._search.SetOpen(not self._search.IsOpen)
+    end
+end
+
+function Window:IsSearchOpen()
+    return self._search ~= nil and self._search.IsOpen
+end
+
+-- Eigenen Eintrag in den Suchindex aufnehmen: { Name = "...", Tab = tab, Group = "...", Frame = instanz, Column = scrollingframe, Keywords = "..." }
+function Window:AddSearchEntry(entry)
+    if self._search and type(entry) == "table" and entry.Tab then
+        self._search.Add(entry)
+    end
 end
 
 function Window:Notify(opts)
@@ -2059,6 +2764,12 @@ function Window:AddTab(name, icon)
     end)
 
     table.insert(self.Tabs, tab)
+
+    -- Tab selbst ist auch ueber die Suche auffindbar
+    if self._search then
+        self._search.Add({ Name = name, Type = "Tab", Tab = tab, Group = "" })
+    end
+
     if not self.ActiveTab then
         self:SelectTab(tab)
     end
@@ -2072,6 +2783,10 @@ function Window:AddTab(name, icon)
 end
 
 function Window:SelectTab(tab)
+    -- Tab-Wechsel schliesst die Suche
+    if self._search then
+        self._search.SetOpen(false)
+    end
     if self.ActiveTab == tab then
         return
     end
@@ -2305,11 +3020,22 @@ function Window:AddHomeTab(opts)
     local exec = Card(right, UDim2.new(1, 0, 0.3, -4), Color3.new(1, 1, 1))
     exec.LayoutOrder = 1
     if supported then
-        Gradient(exec, {
+        -- Verlauf wird aus der Akzentfarbe berechnet und bei Theme-Wechsel neu gemalt
+        local execGrad = Gradient(exec, {
             { 0, Color3.fromRGB(150, 38, 46) },
             { 0.6, Color3.fromRGB(58, 18, 22) },
             { 1, Color3.fromRGB(16, 9, 11) },
         }, 20)
+        local function paintExec()
+            local a = Theme.Accent
+            execGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, ScaleColor(a, 0.78)),
+                ColorSequenceKeypoint.new(0.6, ScaleColor(a, 0.3)),
+                ColorSequenceKeypoint.new(1, ScaleColor(a, 0.08)),
+            })
+        end
+        paintExec()
+        table.insert(ThemeHooks, paintExec)
     else
         Gradient(exec, {
             { 0, Color3.fromRGB(150, 110, 30) },
@@ -2476,6 +3202,90 @@ function Window:AddSettingsTab(opts)
         Icon = "power",
         Callback = function()
             RavineUI:Unload()
+        end,
+    })
+
+    -- ---- Appearance: Theme-Preset, eigene Akzentfarbe, Rainbow, Transparenz ----
+    local look = tab:AddLeftGroupbox("Appearance", "palette")
+    local ts = RavineUI.ThemeState
+    local syncing = false -- verhindert, dass sich Dropdown und Farbwaehler gegenseitig ausloesen
+    local picker
+
+    local names = RavineUI:GetThemeNames()
+    table.insert(names, "Custom")
+
+    local presetDD = look:AddDropdown("RavineUI_ThemePreset", {
+        Text = "Theme",
+        Values = names,
+        Default = ts.Preset,
+        Callback = function(name)
+            if syncing then
+                return
+            end
+            if name ~= "Custom" then
+                RavineUI:SetTheme(name)
+                syncing = true
+                if picker then
+                    picker.Set(ts.Accent)
+                end
+                syncing = false
+            else
+                ts.Preset = "Custom"
+            end
+            RavineUI:_QueueThemeSave()
+        end,
+    })
+
+    picker = look:AddColorPicker("RavineUI_AccentColor", {
+        Text = "Accent color",
+        Default = ts.Accent,
+        Searchable = true,
+        Keywords = "color colour theme custom",
+        Callback = function(c)
+            if syncing then
+                return
+            end
+            ts.Preset = "Custom"
+            RavineUI:SetAccent(c)
+            syncing = true
+            presetDD.Set("Custom")
+            syncing = false
+            RavineUI:_QueueThemeSave()
+        end,
+    })
+
+    look:AddToggle("RavineUI_Rainbow", {
+        Text = "Rainbow accent",
+        Default = ts.Rainbow,
+        Keywords = "rgb animated color",
+        Callback = function(v)
+            RavineUI:SetRainbow(v)
+        end,
+    })
+
+    look:AddSlider("RavineUI_RainbowSpeed", {
+        Text = "Rainbow speed",
+        Min = 2,
+        Max = 100,
+        Default = math.clamp(math.floor(ts.RainbowSpeed * 100 + 0.5), 2, 100),
+        Rounding = 0,
+        Suffix = "%",
+        Callback = function(v)
+            ts.RainbowSpeed = v / 100
+            RavineUI:_QueueThemeSave()
+        end,
+    })
+
+    look:AddSlider("RavineUI_Transparency", {
+        Text = "Window transparency",
+        Min = 0,
+        Max = 60,
+        Default = math.clamp(math.floor(ts.Transparency * 100 + 0.5), 0, 60),
+        Rounding = 0,
+        Suffix = "%",
+        Keywords = "opacity see through",
+        Callback = function(v)
+            self:SetTransparency(v / 100)
         end,
     })
 
@@ -2679,6 +3489,30 @@ local function HitButton(row, height)
         Size = UDim2.new(1, 0, 0, height or 34),
         Text = "",
         Parent = row,
+    })
+end
+
+-- Traegt ein Element in den Suchindex des Fensters ein (opts.Searchable = false schliesst es aus,
+-- opts.Keywords = "a b c" oder { "a", "b" } fuegt zusaetzliche Suchbegriffe hinzu)
+local function RegisterSearch(self, kind, label, frame, obj, opts)
+    local tab = self.Tab
+    local win = tab and tab.Window
+    if not (win and win._search) or opts.Searchable == false then
+        return
+    end
+    local kw = opts.Keywords
+    if type(kw) == "table" then
+        kw = table.concat(kw, " ")
+    end
+    win._search.Add({
+        Name = tostring(label),
+        Type = kind,
+        Tab = tab,
+        Group = self.Name,
+        Frame = frame,
+        Column = self.Column,
+        Obj = obj,
+        Keywords = kw and tostring(kw) or "",
     })
 end
 
@@ -2896,6 +3730,7 @@ function Groupbox:AddButton(name, opts)
 
     AttachTooltip(obj, btn, opts)
     AttachDisable(obj, btn, 6, opts)
+    RegisterSearch(self, "Button", name, btn, obj, opts)
     return obj
 end
 
@@ -2957,6 +3792,7 @@ function Groupbox:AddToggle(id, opts)
     end
     AttachTooltip(obj, row, opts)
     AttachDisable(obj, row, 6, opts)
+    RegisterSearch(self, "Toggle", opts.Text or id, row, obj, opts)
     return obj
 end
 
@@ -3066,6 +3902,7 @@ function Groupbox:AddSlider(id, opts)
     end
     AttachTooltip(obj, row, opts)
     AttachDisable(obj, row, 6, opts)
+    RegisterSearch(self, "Slider", opts.Text or id, row, obj, opts)
     return obj
 end
 
@@ -3391,6 +4228,7 @@ function Groupbox:AddDropdown(id, opts)
             setOpen(false)
         end
     end)
+    RegisterSearch(self, "Dropdown", opts.Text or id, row, obj, opts)
     return obj
 end
 
@@ -3459,6 +4297,7 @@ function Groupbox:AddTextbox(id, opts)
             end)
         end
     end)
+    RegisterSearch(self, "Textbox", opts.Text or id, row, obj, opts)
     return obj
 end
 
@@ -3474,13 +4313,14 @@ function Groupbox:AddColorPicker(id, opts)
     local row = AddRow(self, 34, true)
     RowLabel(row, opts.Text or id, 60)
 
+    -- Vorschau und Farbfeld sind Benutzerfarben und duerfen NIE vom Theme umgefaerbt werden (noTheme = true)
     local swatch = Create("Frame", {
         BackgroundColor3 = color,
         BorderSizePixel = 0,
         Position = UDim2.new(1, -40, 0, 7),
         Size = UDim2.fromOffset(28, 20),
         Parent = row,
-    })
+    }, true)
     Corner(swatch, 4)
     Stroke(swatch, Theme.Border, 1)
     local hit = HitButton(row, 34)
@@ -3496,7 +4336,7 @@ function Groupbox:AddColorPicker(id, opts)
         BorderSizePixel = 0,
         Size = UDim2.new(1, -24, 1, 0),
         Parent = area,
-    })
+    }, true)
     Corner(sv, 4)
     local white = Create("Frame", {
         BackgroundColor3 = Color3.new(1, 1, 1),
@@ -3604,6 +4444,7 @@ function Groupbox:AddColorPicker(id, opts)
             Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, 34) })
         end
     end)
+    RegisterSearch(self, "ColorPicker", opts.Text or id, row, obj, opts)
     return obj
 end
 
@@ -3683,6 +4524,7 @@ function Groupbox:AddKeyPicker(id, opts)
             keyLabel.Text = current
         end
     end)
+    RegisterSearch(self, "KeyPicker", opts.Text or id, row, obj, opts)
     return obj
 end
 
