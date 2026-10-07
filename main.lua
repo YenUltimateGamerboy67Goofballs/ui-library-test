@@ -3907,6 +3907,8 @@ function Groupbox:AddSlider(id, opts)
 end
 
 -- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
+-- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
+-- Suchleiste: Search = true / false. Ohne Angabe erscheint sie automatisch ab 8 Eintraegen.
 function Groupbox:AddDropdown(id, opts)
     opts = opts or {}
     local values = opts.Values or {}
@@ -3918,6 +3920,7 @@ function Groupbox:AddDropdown(id, opts)
     end
     local selected = {} -- nur Multi: [tostring(Wert)] = true
     local open = false
+    local visibleCount = #values
 
     -- ---- Multi-Helfer ----
     local function inValues(key)
@@ -4007,6 +4010,76 @@ function Groupbox:AddDropdown(id, opts)
 
     local hit = HitButton(row, 34)
 
+    -- ---- Suchleiste ----
+    local function searchOn()
+        if opts.Search ~= nil then
+            return opts.Search == true
+        end
+        return #values >= 8
+    end
+    local function listTop()
+        return searchOn() and 68 or 38
+    end
+    local function listHeight()
+        if visibleCount == 0 then
+            return 26
+        end
+        return math.min(visibleCount * 26, 130)
+    end
+    local function fullHeight()
+        return listTop() + listHeight() + 6
+    end
+
+    local searchFrame = Create("Frame", {
+        BackgroundColor3 = Theme.Secondary,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 6, 0, 38),
+        Size = UDim2.new(1, -12, 0, 26),
+        Visible = false,
+        Parent = row,
+    })
+    Corner(searchFrame, 5)
+    local searchStroke = Stroke(searchFrame, Theme.Border, 1)
+
+    local searchIcon = NewIcon(searchFrame, "search", 13, Theme.SubText, "?")
+    searchIcon.Instance.AnchorPoint = Vector2.new(0, 0.5)
+    searchIcon.Instance.Position = UDim2.new(0, 8, 0.5, 0)
+
+    local searchBox = Create("TextBox", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 28, 0, 0),
+        Size = UDim2.new(1, -52, 1, 0),
+        Font = Theme.Font,
+        Text = "",
+        PlaceholderText = "Search...",
+        PlaceholderColor3 = Theme.SubText,
+        TextColor3 = Theme.Text,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+        Parent = searchFrame,
+    })
+
+    local clearBtn = Create("TextButton", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -4, 0.5, 0),
+        Size = UDim2.fromOffset(20, 20),
+        Text = "",
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = searchFrame,
+    })
+    local clearIcon = NewIcon(clearBtn, "x", 12, Theme.SubText, "x")
+    clearIcon.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    clearIcon.Instance.Position = UDim2.fromScale(0.5, 0.5)
+    clearBtn.MouseEnter:Connect(function()
+        TintIcon(clearIcon, Theme.Text)
+    end)
+    clearBtn.MouseLeave:Connect(function()
+        TintIcon(clearIcon, Theme.SubText)
+    end)
+
     local list = Create("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -4025,27 +4098,108 @@ function Groupbox:AddDropdown(id, opts)
         Parent = list,
     })
 
+    local emptyLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 6, 0, 38),
+        Size = UDim2.new(1, -12, 0, 26),
+        Font = Theme.Font,
+        Text = "No results",
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        Visible = false,
+        Parent = row,
+    })
+
     local entries = {}
-    local function listHeight()
-        return math.min(#values * 26, 130)
+
+    local function relayout()
+        if not open then
+            return
+        end
+        list.Position = UDim2.new(0, 6, 0, listTop())
+        emptyLabel.Position = UDim2.new(0, 6, 0, listTop())
+        emptyLabel.Visible = visibleCount == 0
+        list.Visible = visibleCount > 0
+        Tween(row, 0.12, { Size = UDim2.new(1, 0, 0, fullHeight()) })
+        Tween(list, 0.12, { Size = UDim2.new(1, -12, 0, visibleCount > 0 and listHeight() or 0) })
+    end
+
+    local function applyFilter()
+        local q = (searchBox.Text:lower():gsub("^%s+", ""):gsub("%s+$", ""))
+        visibleCount = 0
+        for _, e in ipairs(entries) do
+            local show = q == "" or tostring(e.Value):lower():find(q, 1, true) ~= nil
+            e.Button.Visible = show
+            if show then
+                visibleCount = visibleCount + 1
+            end
+        end
+        list.CanvasPosition = Vector2.new(0, 0)
+        relayout()
     end
 
     local function setOpen(v)
         open = v
         if v then
-            list.Visible = true
-            Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, 38 + listHeight() + 6) })
-            Tween(list, 0.18, { Size = UDim2.new(1, -12, 0, listHeight()) })
+            searchFrame.Visible = searchOn()
+            list.Position = UDim2.new(0, 6, 0, listTop())
+            emptyLabel.Position = UDim2.new(0, 6, 0, listTop())
+            emptyLabel.Visible = visibleCount == 0
+            list.Visible = visibleCount > 0
+            Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, fullHeight()) })
+            Tween(list, 0.18, { Size = UDim2.new(1, -12, 0, visibleCount > 0 and listHeight() or 0) })
+            -- am Handy nicht automatisch fokussieren (sonst springt die Tastatur auf)
+            if searchOn() and not RavineUI.IsMobile then
+                task.delay(0.05, function()
+                    if open then
+                        searchBox:CaptureFocus()
+                    end
+                end)
+            end
         else
+            pcall(function()
+                searchBox:ReleaseFocus()
+            end)
             Tween(row, 0.18, { Size = UDim2.new(1, 0, 0, 34) })
             Tween(list, 0.18, { Size = UDim2.new(1, -12, 0, 0) })
+            emptyLabel.Visible = false
             task.delay(0.18, function()
                 if not open then
                     list.Visible = false
+                    searchFrame.Visible = false
+                    if searchBox.Text ~= "" then
+                        searchBox.Text = "" -- Filter zuruecksetzen
+                    end
                 end
             end)
         end
     end
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        clearBtn.Visible = searchBox.Text ~= ""
+        applyFilter()
+    end)
+    searchBox.Focused:Connect(function()
+        Tween(searchStroke, 0.15, { Color = Theme.Accent })
+    end)
+    searchBox.FocusLost:Connect(function(enterPressed)
+        Tween(searchStroke, 0.15, { Color = Theme.Border })
+        -- Enter waehlt bei Einzelauswahl den ersten Treffer
+        if enterPressed and not multi then
+            for _, e in ipairs(entries) do
+                if e.Button.Visible then
+                    e.Button.MouseButton1Click:Fire()
+                    break
+                end
+            end
+        end
+    end)
+    clearBtn.MouseButton1Click:Connect(function()
+        searchBox.Text = ""
+        if not RavineUI.IsMobile then
+            searchBox:CaptureFocus()
+        end
+    end)
 
     local function isSelected(val)
         if multi then
@@ -4141,6 +4295,7 @@ function Groupbox:AddDropdown(id, opts)
                 end
             end)
         end
+        applyFilter()
     end
     refresh()
 
@@ -4216,7 +4371,8 @@ function Groupbox:AddDropdown(id, opts)
             end
         end
         if open then
-            setOpen(true)
+            searchFrame.Visible = searchOn()
+            relayout()
         end
     end
     function obj:SetValue(v)
