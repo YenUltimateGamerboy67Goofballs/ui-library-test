@@ -23,6 +23,7 @@
             RequiredFunctions = { "loadstring", "writefile" },
         })
         Name- und Avatar-Chip blenden Namen/Avatar aus (wird gespeichert).
+        Der Avatar-Chip versteckt auch den Avatar unten links in der Sidebar (Window:SetAvatarHidden(true/false)).
         tab.Home.SetExecutions(n)   tab.Home.SetAccountRow("Flagged", "Yes", Color3.fromRGB(231, 76, 60))
         Window:OpenFeatureList()   Window:GetFeatureCount()
         Die alte Home-Seite gibt es weiterhin als Window:AddHomeTabClassic({ ... }).
@@ -94,7 +95,7 @@ local RavineUI = {
 }
 
 RavineUI.__index = RavineUI
-RavineUI.Build = "theme-search-home-13"
+RavineUI.Build = "theme-search-home-14"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -2293,6 +2294,12 @@ function RavineUI:CreateWindow(opts)
     Stroke(avatarBtn, Theme.Border, 1)
     LoadAvatar(avatarBtn)
 
+    -- Icon, das statt des Avatars gezeigt wird, wenn "Avatar" im Home-Tab versteckt wird
+    local avatarHiddenIcon = NewIcon(avatarBtn, "eye-off", 18, Theme.SubText, "?")
+    avatarHiddenIcon.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    avatarHiddenIcon.Instance.Position = UDim2.fromScale(0.5, 0.5)
+    avatarHiddenIcon.Instance.Visible = false
+
     MakeDraggable(main, topBar, function()
         return uiScale.Scale
     end)
@@ -2318,6 +2325,8 @@ function RavineUI:CreateWindow(opts)
     windowObj.TitleHolder = titleHolder
     windowObj._logoX = logoX
     windowObj._reserve = reserve
+    windowObj.AvatarButton = avatarBtn
+    windowObj.AvatarHiddenIcon = avatarHiddenIcon
 
     -- Suche (vor den Tabs bauen, damit jeder Tab und jedes Element sich registrieren kann)
     if searchBtn then
@@ -2609,6 +2618,18 @@ function Window:Toggle()
         self:CloseSearch()
     end
     self.Main.Visible = not self.Main.Visible
+end
+
+-- Versteckt/zeigt den Avatar unten links in der Sidebar (wird vom Home-Tab "Avatar"-Chip gesteuert)
+function Window:SetAvatarHidden(hidden)
+    hidden = hidden and true or false
+    self.AvatarHidden = hidden
+    if self.AvatarButton then
+        self.AvatarButton.ImageTransparency = hidden and 1 or 0
+    end
+    if self.AvatarHiddenIcon then
+        self.AvatarHiddenIcon.Instance.Visible = hidden
+    end
 end
 
 function Window:SetLogoSize(px)
@@ -3078,6 +3099,8 @@ local function HomeChip(parent, order, icon, text, onClick)
 end
 
 -- Quadratische Aktion (Rejoin / Hop / Lowest / Job ID)
+-- Icon und Text werden OHNE AnchorPoint/Skalen-Position gesetzt (nur feste Pixel), damit bei
+-- gebrochenen Kachelbreiten keine Halbpixel entstehen (das verursachte die Luecke in "Lowest").
 local function HomeTile(parent, order, icon, text, onClick)
     local btn = Create("TextButton", {
         BackgroundColor3 = Theme.Tertiary,
@@ -3090,19 +3113,36 @@ local function HomeTile(parent, order, icon, text, onClick)
     })
     Corner(btn, 8)
     local st = Stroke(btn, Theme.Border, 1)
-    local ic = NewIcon(btn, icon, 16, Theme.SubText, "•")
-    ic.Instance.AnchorPoint = Vector2.new(0.5, 0)
-    ic.Instance.Position = UDim2.new(0.5, 0, 0, 11)
+
+    local holder = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Parent = btn,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = holder,
+    })
+
+    local ic = NewIcon(holder, icon, 16, Theme.SubText, "•")
+    ic.Instance.LayoutOrder = 1
+
     local lbl = Create("TextLabel", {
         BackgroundTransparency = 1,
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 33),
-        Size = UDim2.new(1, -6, 0, 14),
+        Size = UDim2.new(1, -8, 0, 14),
+        LayoutOrder = 2,
         Font = Theme.Font,
         Text = text,
         TextColor3 = Theme.SubText,
         TextSize = 11,
-        Parent = btn,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextTruncate = Enum.TextTruncate.None,
+        RichText = false,
+        Parent = holder,
     })
     btn.MouseEnter:Connect(function()
         TintIcon(ic, Theme.Text)
@@ -3252,10 +3292,17 @@ function Window:AddHomeTab(opts)
     })
     Create("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 10),
         Parent = page,
     })
-    Create("UIPadding", { PaddingRight = UDim.new(0, 4), Parent = page })
+    -- Links/oben Platz lassen, sonst wird die UIStroke-Outline der Karten vom ScrollingFrame abgeschnitten
+    Create("UIPadding", {
+        PaddingLeft = UDim.new(0, 2),
+        PaddingTop = UDim.new(0, 2),
+        PaddingRight = UDim.new(0, 6),
+        PaddingBottom = UDim.new(0, 6),
+        Parent = page,
+    })
 
     local function Label(parent, props)
         props.BackgroundTransparency = 1
@@ -3266,19 +3313,19 @@ function Window:AddHomeTab(opts)
     end
 
     -- =============== 1) HEADER ===============
-    local header = Card(page, UDim2.new(1, 0, 0, 100), Theme.Secondary)
+    local header = Card(page, UDim2.new(1, 0, 0, 108), Theme.Secondary)
     header.LayoutOrder = 1
     header.ClipsDescendants = true
 
     Label(header, {
-        Position = UDim2.new(0, 22, 0, 12),
+        Position = UDim2.new(0, 22, 0, 14),
         Size = UDim2.new(1, -170, 0, 12),
         Text = string.upper(opts.Greeting or "Welcome back"),
         TextColor3 = Theme.SubText,
         TextSize = 10,
     })
     local nameLabel = Label(header, {
-        Position = UDim2.new(0, 22, 0, 24),
+        Position = UDim2.new(0, 22, 0, 26),
         Size = UDim2.new(1, -170, 0, 28),
         Font = Theme.FontBold,
         Text = LocalPlayer.DisplayName,
@@ -3287,7 +3334,7 @@ function Window:AddHomeTab(opts)
         TextTruncate = Enum.TextTruncate.AtEnd,
     })
     local userLabel = Label(header, {
-        Position = UDim2.new(0, 22, 0, 52),
+        Position = UDim2.new(0, 22, 0, 55),
         Size = UDim2.new(1, -170, 0, 14),
         Text = "@" .. LocalPlayer.Name,
         TextColor3 = Theme.SubText,
@@ -3332,7 +3379,7 @@ function Window:AddHomeTab(opts)
 
     local chips = Create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 22, 0, 70),
+        Position = UDim2.new(0, 22, 0, 76),
         Size = UDim2.new(1, -170, 0, 26),
         Parent = header,
     })
@@ -3350,6 +3397,8 @@ function Window:AddHomeTab(opts)
         userLabel.Text = prefs.HideName and "@hidden" or ("@" .. LocalPlayer.Name)
         avatar.Visible = not prefs.HideAvatar
         avatarHidden.Visible = prefs.HideAvatar
+        -- Avatar unten links in der Sidebar folgt dem Chip
+        self:SetAvatarHidden(prefs.HideAvatar)
         if nameChip then
             nameChip.SetActive(prefs.HideName)
         end
@@ -3460,12 +3509,12 @@ function Window:AddHomeTab(opts)
     -- =============== 3) GAME-KARTE + LINKS ===============
     local mid = Create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 160),
+        Size = UDim2.new(1, 0, 0, 176),
         LayoutOrder = 3,
         Parent = page,
     })
 
-    local gameCard = Card(mid, UDim2.new(0.62, -4, 1, 0), Theme.Secondary)
+    local gameCard = Card(mid, UDim2.new(0.62, -5, 1, 0), Theme.Secondary)
     local thumb = Create("ImageLabel", {
         BackgroundColor3 = Theme.Tertiary,
         BorderSizePixel = 0,
@@ -3511,8 +3560,8 @@ function Window:AddHomeTab(opts)
 
     local tiles = Create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(14, 68),
-        Size = UDim2.new(1, -28, 0, 56),
+        Position = UDim2.fromOffset(14, 72),
+        Size = UDim2.new(1, -28, 0, 62),
         Parent = gameCard,
     })
     Create("UIListLayout", {
@@ -3572,7 +3621,7 @@ function Window:AddHomeTab(opts)
     local jobId = game.JobId
     local jobShort = jobId == "" and "-" or (#jobId > 14 and (jobId:sub(1, 8) .. ".." .. jobId:sub(-4)) or jobId)
     Label(gameCard, {
-        Position = UDim2.new(0, 14, 0, 134),
+        Position = UDim2.new(0, 14, 0, 148),
         Size = UDim2.new(1, -28, 0, 14),
         Text = "Job " .. jobShort .. "   ·   Place " .. tostring(game.PlaceId),
         TextColor3 = Theme.SubText,
@@ -3581,8 +3630,8 @@ function Window:AddHomeTab(opts)
     })
 
     -- Links
-    local linkCard = Card(mid, UDim2.new(0.38, -4, 1, 0), Theme.Secondary)
-    linkCard.Position = UDim2.new(0.62, 4, 0, 0)
+    local linkCard = Card(mid, UDim2.new(0.38, -5, 1, 0), Theme.Secondary)
+    linkCard.Position = UDim2.new(0.62, 5, 0, 0)
     Label(linkCard, {
         Position = UDim2.new(0, 16, 0, 12),
         Size = UDim2.new(1, -32, 0, 12),
