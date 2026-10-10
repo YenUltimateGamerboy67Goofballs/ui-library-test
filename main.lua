@@ -1,6 +1,44 @@
 --[[
     RavineUI - Modern Dashboard UI Library
-    Version 2.2
+    Version 2.3
+
+    LOADING SCREEN (NEU):
+        local splash = RavineUI:Splash({
+            Title = "Ravine Hub",
+            Subtitle = "by Ravine",
+            Text = "Loading...",                  -- Ladetext (die Punkte "..." werden automatisch animiert)
+            Steps = {                             -- optional: einzelne Ladeschritte
+                "Loading modules",
+                { Text = "Loading config", Time = 0.8 },
+                { Text = "Fetching data", Action = function() task.wait(1) end },  -- Action = echte Arbeit, Balken wartet darauf
+                "Almost done",
+            },
+            StepTime = 0.6,                       -- Standardzeit pro Schritt (Sekunden)
+            Duration = 3,                         -- Dauer ohne Steps (Sekunden)
+            Tips = { "Tipp 1", "Tipp 2" },        -- optional: wechselnde Tipps unten
+            FinishText = "Ready!",                -- Text am Ende (false = keiner)
+            Outro = "Zoom",                       -- "Zoom", "Fade", "Slide" oder "Shrink"
+            Blur = true,                          -- Unschaerfe hinter dem Ladescreen (true / false / Zahl)
+            Backdrop = true,                      -- abgedunkelter Hintergrund
+            Logo = "moon",                        -- Lucide-Icon oder rbxassetid
+            Yield = true,                         -- wartet, bis der Ladescreen fertig ist
+            Manual = false,                       -- true = du steuerst alles selbst (siehe unten)
+            AutoFinish = true,                    -- false = bleibt am Ende offen, bis du :Finish() rufst
+            Animations = true,                    -- Partikel, Ring, Glanz auf dem Balken usw.
+            OnFinish = function() end,
+        })
+
+        Manuell steuern:
+            splash:SetText("Loading ESP")         -- Ladetext aendern (jederzeit)
+            splash:SetProgress(0.5)               -- 0 bis 1
+            splash:Step("Loading config")         -- naechster Schritt (mit Total = n geht der Balken gleichmaessig)
+            splash:SetTitle("...")  splash:SetSubtitle("...")
+            splash:Finish()                       -- Ausblenden
+            splash:Wait()                         -- warten bis fertig
+            splash:Destroy()                      -- sofort entfernen
+
+        Fenster-Animationen: Das Fenster poppt beim Oeffnen sanft auf, Tabs gleiten beim Wechsel ein.
+        Abschalten mit CreateWindow({ Animations = false }) oder in Settings > Appearance.
 
     THEME SYSTEM (live, alles wird sofort umgefaerbt):
         RavineUI:SetTheme("Ocean")                 -- Preset: Crimson, Ocean, Violet, Emerald, Amber, Rose, Cyan, Orange
@@ -31,11 +69,12 @@
         Die UI passt immer auf den Bildschirm: Resize und UI-scale-Slider sind auf die
         Bildschirmgroesse begrenzt und das Fenster bleibt im sichtbaren Bereich.
 
-    Dropdown mit Mehrfachauswahl:
+    Dropdown mit Mehrfachauswahl und Suchleiste:
         local dd = Box:AddDropdown("Targets", {
             Text = "Targets",
             Values = { "Players", "NPCs", "Bosses" },
             Multi = true,
+            Search = true,                      -- Suchleiste immer an (false = aus, ohne Angabe ab 8 Eintraegen)
             Default = { "Players" },            -- Array {"A","B"} oder Map {A = true}
             Callback = function(selected)       -- selected = { Players = true, Bosses = true }
                 print(selected.Players)
@@ -61,14 +100,14 @@
 ]]
 
 local RavineUI = {
-    Version = "2.2.0",
+    Version = "2.3.0",
     Toggles = {},
     Options = {},
     CustomIcons = {},
 }
 
 RavineUI.__index = RavineUI
-RavineUI.Build = "theme-search-12"
+RavineUI.Build = "theme-search-splash-13"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -79,6 +118,7 @@ local CoreGui = game:GetService("CoreGui")
 local Stats = game:GetService("Stats")
 local LocalizationService = game:GetService("LocalizationService")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
 -- Touch-Geraet ohne Tastatur = Mobile (kann in CreateWindow mit Mobile = true/false ueberschrieben werden)
@@ -762,6 +802,519 @@ function RavineUI:Notify(opts)
     end)
 end
 
+-- ============ SPLASH / LOADING SCREEN ============
+-- Siehe Dokumentation oben. Gibt ein Objekt zurueck: SetText, SetProgress, Step, SetTitle, SetSubtitle, Finish, Wait, Destroy
+function RavineUI:Splash(opts)
+    if type(opts) == "string" then
+        opts = { Text = opts }
+    end
+    opts = opts or {}
+
+    -- gespeichertes Theme schon jetzt anwenden, damit der Ladescreen in der richtigen Farbe erscheint
+    if not self._ThemeLoaded then
+        self._ThemeLoaded = true
+        pcall(function()
+            self:_InitTheme(opts)
+        end)
+    end
+
+    if self._Splash and not self._Splash.Done then
+        self._Splash.Destroy()
+    end
+
+    local title = opts.Title or "RavineUI"
+    local subtitle = opts.Subtitle or ""
+    local steps = type(opts.Steps) == "table" and #opts.Steps > 0 and opts.Steps or nil
+    local manual = opts.Manual == true
+    local animations = opts.Animations ~= false
+    local animatedDots = opts.AnimatedDots ~= false
+    local tips = type(opts.Tips) == "table" and #opts.Tips > 0 and opts.Tips or nil
+    local W, H = opts.Width or 380, opts.Height or 230
+
+    local gui = Create("ScreenGui", {
+        Name = "RavineUI_Splash",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 1000,
+        Parent = GetGuiParent(),
+    })
+
+    -- Hintergrund abdunkeln (und Eingaben dahinter blockieren)
+    local backdrop = Create("Frame", {
+        Name = "Backdrop",
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        Active = true,
+        Visible = opts.Backdrop ~= false,
+        Parent = gui,
+    }, true)
+
+    -- Unschaerfe hinter dem Ladescreen
+    local blur
+    if opts.Blur ~= false then
+        pcall(function()
+            blur = Instance.new("BlurEffect")
+            blur.Name = "RavineUI_SplashBlur"
+            blur.Size = 0
+            blur.Parent = Lighting
+        end)
+    end
+    local blurSize = type(opts.Blur) == "number" and opts.Blur or 14
+
+    -- CanvasGroup, damit sich die komplette Karte mit einem Wert ein- und ausblenden laesst
+    local card = Create("CanvasGroup", {
+        Name = "Card",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(W, H),
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        GroupTransparency = 1,
+        Parent = gui,
+    })
+    Corner(card, 14)
+    Stroke(card, Theme.Border, 1)
+    local uiScale = Create("UIScale", { Parent = card })
+
+    local function fitScale()
+        local cam = workspace.CurrentCamera
+        if not cam then
+            return 1
+        end
+        local vp = cam.ViewportSize
+        local s = math.min(1, (vp.X - 24) / W, (vp.Y - 24) / H)
+        if RavineUI.IsMobile then
+            s = s * (RavineUI.MobileScale or 0.7)
+        end
+        return math.clamp(s, 0.25, 2)
+    end
+    local targetScale = fitScale()
+    uiScale.Scale = targetScale * 0.9
+
+    -- ---- Hintergrund-Deko (zuerst erstellen, damit der Inhalt darueber liegt) ----
+    Glow(card, Theme.Accent, 90, 0.22)
+    local glowBottom = Glow(card, Theme.Accent, -90, 0.12)
+    glowBottom.Name = "GlowBottom"
+
+    local particles = {}
+    if animations then
+        local count = RavineUI.IsMobile and 10 or 16
+        for _ = 1, count do
+            local size = math.random(2, 4)
+            local f = Create("Frame", {
+                BackgroundColor3 = Theme.Accent,
+                BorderSizePixel = 0,
+                Size = UDim2.fromOffset(size, size),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Parent = card,
+            })
+            Corner(f, 2)
+            table.insert(particles, {
+                f = f,
+                x = math.random(),
+                y = math.random(),
+                speed = 0.04 + math.random() * 0.08,
+                phase = math.random() * 6.28,
+                drift = 0.01 + math.random() * 0.02,
+            })
+        end
+    end
+
+    -- ---- Logo mit rotierendem Ring ----
+    local logoSrc = opts.Logo or opts.Icon or "moon"
+    local customLogo = IsCustomImage(logoSrc)
+    local logoPx = opts.LogoSize or (customLogo and 42 or 28)
+
+    local logoHolder = Create("Frame", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 24),
+        Size = UDim2.fromOffset(68, 68),
+        Parent = card,
+    })
+    local track = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Parent = logoHolder,
+    })
+    Corner(track, 34)
+    Stroke(track, Theme.Border, 3)
+
+    local ring = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        Parent = logoHolder,
+    })
+    Corner(ring, 34)
+    local ringStroke = Stroke(ring, Theme.Accent, 3)
+    local ringGrad = Create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.45, 0.85),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Parent = ringStroke,
+    })
+
+    local logoIcon = NewIcon(logoHolder, logoSrc, logoPx, customLogo and Color3.new(1, 1, 1) or Theme.Accent, "V")
+    logoIcon.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    logoIcon.Instance.Position = UDim2.fromScale(0.5, 0.5)
+    local pulse = Create("UIScale", { Parent = logoIcon.Instance })
+
+    -- ---- Texte ----
+    local titleLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 100),
+        Size = UDim2.new(1, 0, 0, 24),
+        Font = Theme.FontBold,
+        Text = title,
+        TextColor3 = Theme.Text,
+        TextSize = 19,
+        Parent = card,
+    })
+    local subLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 124),
+        Size = UDim2.new(1, 0, 0, 16),
+        Font = Theme.Font,
+        Text = subtitle,
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        Parent = card,
+    })
+
+    local statusBase = ""
+    local statusLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 24, 0, 154),
+        Size = UDim2.new(1, -90, 0, 16),
+        Font = Theme.Font,
+        Text = "",
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = card,
+    })
+    local percentLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -24, 0, 154),
+        Size = UDim2.fromOffset(56, 16),
+        Font = Theme.FontBold,
+        Text = "0%",
+        TextColor3 = Theme.Accent,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = card,
+    })
+
+    -- ---- Fortschrittsbalken mit Glanz ----
+    local barBg = Create("Frame", {
+        BackgroundColor3 = Theme.ToggleOff,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 24, 0, 177),
+        Size = UDim2.new(1, -48, 0, 6),
+        Parent = card,
+    })
+    Corner(barBg, 3)
+    local fill = Create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 0, 1, 0),
+        ClipsDescendants = true,
+        Parent = barBg,
+    })
+    Corner(fill, 3)
+    local shimmer = Create("Frame", {
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        Size = UDim2.new(0.4, 0, 1, 0),
+        Position = UDim2.fromScale(-0.5, 0),
+        Visible = animations,
+        Parent = fill,
+    }, true)
+    Create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0.55),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Parent = shimmer,
+    })
+
+    local tipLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 24, 0, 196),
+        Size = UDim2.new(1, -48, 0, 24),
+        Font = Theme.Font,
+        Text = tips and tips[1] or "",
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+        TextWrapped = true,
+        TextTransparency = 0.25,
+        Parent = card,
+    })
+
+    -- ---- Zustand ----
+    local target, shown = 0, 0
+    local finishing, destroyed = false, false
+    local stepIndex = 0
+    local conn
+
+    local obj = { Done = false, Total = opts.Total or (steps and #steps) or nil }
+
+    local function setText(t)
+        t = tostring(t or "")
+        if animatedDots then
+            statusBase = (t:gsub("%s*%.+$", ""))
+        else
+            statusBase = t
+        end
+        statusLabel.Text = statusBase
+    end
+    setText(opts.Text or "Loading")
+
+    -- ---- Animations-Loop ----
+    local t = 0
+    local lastDots = -1
+    local lastTip = 0
+    local tipIndex = 1
+    conn = RunService.RenderStepped:Connect(function(dt)
+        t = t + dt
+
+        -- Balken laeuft weich zum Zielwert
+        shown = shown + (target - shown) * math.min(dt * 6, 1)
+        if math.abs(target - shown) < 0.002 then
+            shown = target
+        end
+        fill.Size = UDim2.new(shown, 0, 1, 0)
+        percentLabel.Text = math.floor(shown * 100 + 0.5) .. "%"
+
+        if animations then
+            shimmer.Visible = shown > 0.03
+            shimmer.Position = UDim2.fromScale(((t * 0.9) % 1.6) - 0.5, 0)
+            ringGrad.Rotation = (t * 240) % 360
+            pulse.Scale = 1 + 0.07 * math.sin(t * 3)
+
+            for _, p in ipairs(particles) do
+                p.y = p.y - p.speed * dt
+                if p.y < -0.05 then
+                    p.y = 1.05
+                    p.x = math.random()
+                end
+                local px = p.x + math.sin(t * 0.8 + p.phase) * p.drift
+                p.f.Position = UDim2.fromScale(px, p.y)
+                local edge = math.abs(p.y - 0.5) * 2
+                p.f.BackgroundTransparency = 0.45 + 0.55 * edge * edge
+            end
+        end
+
+        -- animierte Punkte hinter dem Ladetext
+        if animatedDots and not finishing then
+            local n = math.floor(t * 2.5) % 4
+            if n ~= lastDots then
+                lastDots = n
+                statusLabel.Text = statusBase .. string.rep(".", n)
+            end
+        end
+
+        -- Tipps wechseln mit Ueberblendung
+        if tips and #tips > 1 and t - lastTip > (opts.TipTime or 3.5) then
+            lastTip = t
+            task.spawn(function()
+                Tween(tipLabel, 0.2, { TextTransparency = 1 })
+                task.wait(0.22)
+                if destroyed then
+                    return
+                end
+                tipIndex = tipIndex % #tips + 1
+                tipLabel.Text = tostring(tips[tipIndex])
+                Tween(tipLabel, 0.2, { TextTransparency = 0.25 })
+            end)
+        end
+    end)
+
+    -- ---- Einblenden ----
+    Tween(backdrop, 0.3, { BackgroundTransparency = 0.45 })
+    if blur then
+        Tween(blur, 0.4, { Size = blurSize })
+    end
+    Tween(card, 0.35, { GroupTransparency = 0 })
+    Tween(uiScale, 0.4, { Scale = targetScale }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+    -- ---- Ende / Entfernen ----
+    local function cleanup()
+        destroyed = true
+        if conn then
+            conn:Disconnect()
+            conn = nil
+        end
+        if blur then
+            pcall(function()
+                blur:Destroy()
+            end)
+        end
+        if gui then
+            gui:Destroy()
+        end
+        obj.Done = true
+    end
+
+    local function finish()
+        if finishing or destroyed then
+            return
+        end
+        finishing = true
+        task.spawn(function()
+            target = 1
+            local t0 = os.clock()
+            while shown < 0.995 and os.clock() - t0 < 1.5 and not destroyed do
+                task.wait()
+            end
+            if destroyed then
+                return
+            end
+
+            if opts.FinishText ~= false then
+                animatedDots = false
+                statusLabel.Text = tostring(opts.FinishText or "Done")
+                statusLabel.TextColor3 = Theme.Success
+                percentLabel.Text = "100%"
+            end
+            task.wait(opts.FinishDelay or 0.4)
+            if destroyed then
+                return
+            end
+
+            local outro = tostring(opts.Outro or "Zoom")
+            local tt = 0.35
+            Tween(backdrop, tt, { BackgroundTransparency = 1 })
+            Tween(card, tt, { GroupTransparency = 1 })
+            if blur then
+                Tween(blur, tt, { Size = 0 })
+            end
+            if outro == "Zoom" then
+                Tween(uiScale, tt, { Scale = targetScale * 1.15 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            elseif outro == "Shrink" then
+                Tween(uiScale, tt, { Scale = targetScale * 0.8 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            elseif outro == "Slide" then
+                Tween(card, tt, { Position = UDim2.new(0.5, 0, 0.5, -70) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+            end
+            task.wait(tt + 0.05)
+            cleanup()
+            if opts.OnFinish then
+                task.spawn(opts.OnFinish)
+            end
+        end)
+    end
+
+    -- ---- API ----
+    obj.SetText = function(a, b)
+        setText(Arg(obj, a, b))
+    end
+    obj.SetTitle = function(a, b)
+        titleLabel.Text = tostring(Arg(obj, a, b))
+    end
+    obj.SetSubtitle = function(a, b)
+        subLabel.Text = tostring(Arg(obj, a, b))
+    end
+    obj.SetProgress = function(a, b)
+        target = math.clamp(tonumber(Arg(obj, a, b)) or 0, 0, 1)
+    end
+    obj.GetProgress = function()
+        return target
+    end
+    -- Naechster Schritt: Text setzen und Balken weiterbewegen
+    obj.Step = function(a, b, c)
+        local text, progress = a, b
+        if a == obj then
+            text, progress = b, c
+        end
+        if text then
+            setText(text)
+        end
+        stepIndex = stepIndex + 1
+        if progress then
+            target = math.clamp(tonumber(progress) or target, 0, 1)
+        elseif obj.Total and obj.Total > 0 then
+            target = math.clamp(stepIndex / obj.Total, 0, 1)
+        else
+            target = target + (1 - target) * 0.25
+        end
+    end
+    obj.Finish = function()
+        finish()
+    end
+    obj.Wait = function()
+        while not obj.Done do
+            task.wait()
+        end
+    end
+    obj.Destroy = function()
+        cleanup()
+    end
+    obj.IsFinished = function()
+        return obj.Done
+    end
+    self._Splash = obj
+
+    -- ---- Automatischer Ablauf ----
+    if not manual then
+        task.spawn(function()
+            task.wait(0.35) -- kurz warten, bis die Einblendung durch ist
+            if steps then
+                local n = #steps
+                local per = opts.StepTime or ((opts.Duration or (n * 0.6)) / n)
+                for i, st in ipairs(steps) do
+                    if destroyed or finishing then
+                        return
+                    end
+                    local text, time, action = st, per, nil
+                    if type(st) == "table" then
+                        text = st.Text or st[1] or ""
+                        time = st.Time or per
+                        action = st.Action
+                    end
+                    setText(text)
+                    stepIndex = i
+                    target = math.max(target, (i - 1) / n + 0.6 / n)
+                    if action then
+                        local ok, err = pcall(action)
+                        if not ok then
+                            warn("[RavineUI] Splash step error: " .. tostring(err))
+                        end
+                    end
+                    task.wait(time)
+                    target = i / n
+                end
+            else
+                local duration = opts.Duration or 3
+                local start = os.clock()
+                while not destroyed and not finishing do
+                    local p = math.clamp((os.clock() - start) / duration, 0, 1)
+                    target = math.sin(p * math.pi / 2) -- langsam zum Ende hin
+                    if p >= 1 then
+                        break
+                    end
+                    task.wait()
+                end
+            end
+            if opts.AutoFinish ~= false and not destroyed then
+                finish()
+            end
+        end)
+    end
+
+    if opts.Yield then
+        obj.Wait()
+    end
+    return obj
+end
+
 -- ============ CHANGELOG SYSTEM ============
 function RavineUI:ShowChangelog(opts)
     opts = opts or {}
@@ -1226,6 +1779,9 @@ function RavineUI:Unload()
     table.clear(Connections)
     self._rainbowConn = nil
     table.clear(ThemeHooks)
+    if self._Splash and not self._Splash.Done then
+        pcall(self._Splash.Destroy)
+    end
     if self.Gui then
         self.Gui:Destroy()
     end
@@ -2255,6 +2811,7 @@ function RavineUI:CreateWindow(opts)
         Alive = true,
         Size = size,
         UserScale = savedScale,
+        Animations = opts.Animations ~= false,
     }, Window)
     windowObj.Logo = logo
     windowObj.TitleHolder = titleHolder
@@ -2290,6 +2847,11 @@ function RavineUI:CreateWindow(opts)
         local cam = workspace.CurrentCamera
         if not cam then
             return
+        end
+        -- laufende Oeffnen-Animation abbrechen, damit sie die neue Scale nicht ueberschreibt
+        if windowObj._openTween then
+            windowObj._openTween:Cancel()
+            windowObj._openTween = nil
         end
         local vp = cam.ViewportSize
         local fit = math.min((vp.X - 24) / math.max(size.X.Offset, 1), (vp.Y - 24) / math.max(size.Y.Offset, 1))
@@ -2542,15 +3104,42 @@ function RavineUI:CreateWindow(opts)
         windowObj.ToggleButton = fb
     end
 
+    -- Oeffnen-Animation (erst nachdem das Script alle Tabs hinzugefuegt hat, damit die Scale stimmt)
+    if windowObj.Animations then
+        task.defer(function()
+            if windowObj.Alive and main.Parent then
+                windowObj:_PlayOpen()
+            end
+        end)
+    end
+
     return windowObj
+end
+
+-- Sanftes Aufpoppen des Fensters
+function Window:_PlayOpen()
+    if not self.Animations or not self._updateScale then
+        return
+    end
+    self._updateScale()
+    local target = self.Scale.Scale
+    self.Scale.Scale = target * 0.92
+    self._openTween = Tween(self.Scale, 0.3, { Scale = target }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 end
 
 function Window:Toggle()
     TipHide()
     if self.Main.Visible then
         self:CloseSearch()
+        self.Main.Visible = false
+    else
+        self.Main.Visible = true
+        self:_PlayOpen()
     end
-    self.Main.Visible = not self.Main.Visible
+end
+
+function Window:SetAnimations(v)
+    self.Animations = v and true or false
 end
 
 function Window:SetLogoSize(px)
@@ -2791,6 +3380,7 @@ function Window:SelectTab(tab)
         return
     end
     TipHide()
+    local previous = self.ActiveTab
     for _, t in ipairs(self.Tabs) do
         t.Frame.Visible = false
         t:_SetActive(false)
@@ -2798,6 +3388,12 @@ function Window:SelectTab(tab)
     self.ActiveTab = tab
     tab.Frame.Visible = true
     tab:_SetActive(true)
+
+    -- Inhalt gleitet leicht von unten ein
+    if previous and self.Animations then
+        tab.Frame.Position = UDim2.fromOffset(0, 12)
+        Tween(tab.Frame, 0.22, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    end
 end
 
 -- ============ HOME TAB ============
@@ -3286,6 +3882,15 @@ function Window:AddSettingsTab(opts)
         Keywords = "opacity see through",
         Callback = function(v)
             self:SetTransparency(v / 100)
+        end,
+    })
+
+    look:AddToggle("RavineUI_Animations", {
+        Text = "Window animations",
+        Default = self.Animations,
+        Keywords = "motion effects transitions",
+        Callback = function(v)
+            self:SetAnimations(v)
         end,
     })
 
@@ -3906,7 +4511,6 @@ function Groupbox:AddSlider(id, opts)
     return obj
 end
 
--- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
 -- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
 -- Suchleiste: Search = true / false. Ohne Angabe erscheint sie automatisch ab 8 Eintraegen.
 function Groupbox:AddDropdown(id, opts)
