@@ -1,6 +1,31 @@
 --[[
     RavineUI - Modern Dashboard UI Library
-    Version 2.2
+    Version 2.4
+
+    HOME TAB (NEU, Dashboard):
+        Window:AddHomeTab({
+            Greeting = "Welcome back",            -- kleine Zeile ueber dem Namen
+            Badge = "Beta",                       -- Chip links (false = aus)
+            BadgeIcon = "swords",
+            Discord = "discord.gg/xyz",           -- fuegt Link-Zeile hinzu
+            Changelog = { ... },                  -- fuegt Link-Zeile hinzu (gleiche Daten wie ShowChangelog)
+            Links = {                             -- eigene Links
+                { Name = "Website", Description = "example.com", Icon = "globe", Url = "https://example.com" },
+                { Name = "Support", Icon = "life-buoy", Callback = function() end },
+            },
+            FeatureList = true,                   -- "Feature list" Zeile (zaehlt Features ueber die Suche)
+            Executions = 12,                      -- Zahl oder Funktion; ohne Angabe zaehlt ein lokaler Zaehler pro Account
+            Flagged = false,                      -- Account-Karte: "Flagged"
+            Account = {                           -- false = Karte aus
+                Title = "Account", Icon = "shield", Collapsed = false,
+                Rows = { { Label = "Key", Value = "Premium" }, { Label = "Days", Value = function() return 5 end } },
+            },
+            RequiredFunctions = { "loadstring", "writefile" },
+        })
+        Name- und Avatar-Chip blenden Namen/Avatar aus (wird gespeichert).
+        tab.Home.SetExecutions(n)   tab.Home.SetAccountRow("Flagged", "Yes", Color3.fromRGB(231, 76, 60))
+        Window:OpenFeatureList()   Window:GetFeatureCount()
+        Die alte Home-Seite gibt es weiterhin als Window:AddHomeTabClassic({ ... }).
 
     THEME SYSTEM (live, alles wird sofort umgefaerbt):
         RavineUI:SetTheme("Ocean")                 -- Preset: Crimson, Ocean, Violet, Emerald, Amber, Rose, Cyan, Orange
@@ -31,11 +56,12 @@
         Die UI passt immer auf den Bildschirm: Resize und UI-scale-Slider sind auf die
         Bildschirmgroesse begrenzt und das Fenster bleibt im sichtbaren Bereich.
 
-    Dropdown mit Mehrfachauswahl:
+    Dropdown mit Mehrfachauswahl und Suchleiste:
         local dd = Box:AddDropdown("Targets", {
             Text = "Targets",
             Values = { "Players", "NPCs", "Bosses" },
             Multi = true,
+            Search = true,                      -- Suchleiste immer an (false = aus, ohne Angabe ab 8 Eintraegen)
             Default = { "Players" },            -- Array {"A","B"} oder Map {A = true}
             Callback = function(selected)       -- selected = { Players = true, Bosses = true }
                 print(selected.Players)
@@ -61,14 +87,14 @@
 ]]
 
 local RavineUI = {
-    Version = "2.2.0",
+    Version = "2.4.0",
     Toggles = {},
     Options = {},
     CustomIcons = {},
 }
 
 RavineUI.__index = RavineUI
-RavineUI.Build = "theme-search-12"
+RavineUI.Build = "theme-search-home-13"
 
 -- ============ SERVICES ============
 local Players = game:GetService("Players")
@@ -1918,6 +1944,25 @@ local function BuildSearch(win, main, onState)
         end
 
         if #tokens == 0 then
+            if api.ListMode then
+                -- Feature-Liste: alle Features (ohne Home/Settings) der Reihe nach
+                local n, tabCount, seen = 0, 0, {}
+                for _, e in ipairs(entries) do
+                    if e.Type ~= "Tab" and e.Tab and not e.Tab._internal then
+                        n = n + 1
+                        shown[n] = e
+                        makeRow(e, n)
+                        if not seen[e.Tab] then
+                            seen[e.Tab] = true
+                            tabCount = tabCount + 1
+                        end
+                    end
+                end
+                info.Text = "Feature list  -  " .. n .. (n == 1 and " feature" or " features") .. " across " .. Plural(tabCount, "tab")
+                empty.Text = "No features yet"
+                empty.Visible = n == 0
+                return
+            end
             info.Text = Plural(#entries, "option") .. " searchable"
             empty.Text = "Type to search every option across all tabs"
             empty.Visible = true
@@ -1990,6 +2035,9 @@ local function BuildSearch(win, main, onState)
             return
         end
         api.IsOpen = v
+        if not v then
+            api.ListMode = false
+        end
         TipHide()
         panel.Visible = v
         if v then
@@ -2008,6 +2056,16 @@ local function BuildSearch(win, main, onState)
         end
         if onState then
             onState(v)
+        end
+    end
+
+    -- Oeffnet die Suche im Listen-Modus (zeigt alle Features, tippen filtert normal)
+    function api.OpenList()
+        api.ListMode = true
+        if api.IsOpen then
+            render(box.Text)
+        else
+            api.SetOpen(true, "")
         end
     end
 
@@ -2800,8 +2858,1106 @@ function Window:SelectTab(tab)
     tab:_SetActive(true)
 end
 
--- ============ HOME TAB ============
+-- ============ HOME TAB (Dashboard) ============
+local HomeFile = "RavineUI/home.json"
+
+local function ReadHomeData()
+    local data = { Execs = {} }
+    if not HasFS() then
+        return data
+    end
+    pcall(function()
+        if isfile(HomeFile) then
+            local d = HttpService:JSONDecode(readfile(HomeFile))
+            if type(d) == "table" then
+                data = d
+                if type(data.Execs) ~= "table" then
+                    data.Execs = {}
+                end
+            end
+        end
+    end)
+    return data
+end
+
+local function WriteHomeData(data)
+    if not HasFS() then
+        return
+    end
+    pcall(function()
+        EnsureFolders()
+        writefile(HomeFile, HttpService:JSONEncode(data))
+    end)
+end
+
+local KeyShort = {
+    RightControl = "RCtrl", LeftControl = "LCtrl",
+    RightShift = "RShift", LeftShift = "LShift",
+    RightAlt = "RAlt", LeftAlt = "LAlt",
+    Insert = "Ins", Delete = "Del", Return = "Enter",
+    Backspace = "Bksp", PageUp = "PgUp", PageDown = "PgDn", Escape = "Esc",
+}
+
+local function ShortKey(name)
+    return KeyShort[name] or name
+end
+
+local function FormatSession(s)
+    s = math.floor(s)
+    if s >= 3600 then
+        return string.format("%dh %dm", s // 3600, (s % 3600) // 60)
+    end
+    if s >= 60 then
+        return string.format("%dm %ds", s // 60, s % 60)
+    end
+    return s .. "s"
+end
+
+-- ---- Server-Funktionen (Rejoin / Hop / Lowest) ----
+local TeleportService = game:GetService("TeleportService")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local function FetchServers(sort)
+    local url = string.format(
+        "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=%s&limit=100&excludeFullGames=true",
+        game.PlaceId, sort
+    )
+    local ok, res = pcall(function()
+        return HttpService:JSONDecode(game:HttpGet(url))
+    end)
+    if ok and type(res) == "table" and type(res.data) == "table" then
+        return res.data
+    end
+    return nil
+end
+
+-- mode = "random" (Hop) oder "lowest" (Server mit den wenigsten Spielern)
+local function PickServer(mode)
+    local list = FetchServers(mode == "lowest" and "Asc" or "Desc")
+    if not list then
+        return nil
+    end
+    local pool = {}
+    for _, s in ipairs(list) do
+        if s.id ~= game.JobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers then
+            table.insert(pool, s)
+        end
+    end
+    if #pool == 0 then
+        return nil
+    end
+    if mode == "lowest" then
+        return pool[1]
+    end
+    return pool[math.random(#pool)]
+end
+
+local function RejoinServer()
+    if #Players:GetPlayers() <= 1 then
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    else
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end
+end
+
+-- ---- kleine UI-Bausteine ----
+local GRAPH_BAR = Color3.fromRGB(62, 62, 70)
+local BAD_COLOR = Color3.fromRGB(231, 76, 60)
+
+-- Balkendiagramm: Push(wert, farbeDesLetztenBalkens, mindestMaximum)
+local function MakeGraph(parent, position, size, n)
+    local holder = Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = position,
+        Size = size,
+        Parent = parent,
+    })
+    local bars, values = {}, {}
+    for i = 1, n do
+        values[i] = 0
+        bars[i] = Create("Frame", {
+            BackgroundColor3 = GRAPH_BAR,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0, 1),
+            Position = UDim2.new((i - 1) / n, 0, 1, 0),
+            Size = UDim2.new(1 / n, -2, 0.06, 0),
+            Parent = holder,
+        }, true)
+        Corner(bars[i], 1)
+    end
+    local api = {}
+    function api.Push(v, color, minMax)
+        table.remove(values, 1)
+        table.insert(values, v)
+        local maxV = minMax or 1
+        for _, x in ipairs(values) do
+            if x > maxV then
+                maxV = x
+            end
+        end
+        for i = 1, n do
+            local h = math.max(values[i] / maxV, 0.06)
+            bars[i].Size = UDim2.new(1 / n, -2, h, 0)
+            bars[i].BackgroundColor3 = (i == n) and color or GRAPH_BAR
+        end
+    end
+    return api
+end
+
+-- Kleiner Button mit Icon + Text (Beta / Name / Avatar). onClick = nil: reines Label
+local function HomeChip(parent, order, icon, text, onClick)
+    local btn = Create("TextButton", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 26),
+        LayoutOrder = order,
+        Text = "",
+        AutoButtonColor = false,
+        Parent = parent,
+    })
+    Corner(btn, 7)
+    local st = Stroke(btn, Theme.Border, 1)
+    Create("UIPadding", {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 12),
+        Parent = btn,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = btn,
+    })
+    local static = onClick == nil
+    local baseColor = static and Theme.Text or Theme.SubText
+    local ic = NewIcon(btn, icon, 13, baseColor, "•")
+    ic.Instance.LayoutOrder = 1
+    local lbl = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 14),
+        LayoutOrder = 2,
+        Font = Theme.FontBold,
+        Text = text,
+        TextColor3 = baseColor,
+        TextSize = 11,
+        Parent = btn,
+    })
+
+    local active, hovering = false, false
+    local api = { Button = btn }
+    local function paint()
+        local c = baseColor
+        if active then
+            c = Theme.Accent
+        elseif hovering and not static then
+            c = Theme.Text
+        end
+        TintIcon(ic, c)
+        Tween(lbl, 0.15, { TextColor3 = c })
+        Tween(st, 0.15, { Color = (active or (hovering and not static)) and Theme.Accent or Theme.Border })
+    end
+    btn.MouseEnter:Connect(function()
+        hovering = true
+        paint()
+    end)
+    btn.MouseLeave:Connect(function()
+        hovering = false
+        paint()
+    end)
+    api.SetActive = function(v)
+        active = v and true or false
+        paint()
+    end
+    if onClick then
+        btn.MouseButton1Click:Connect(onClick)
+    end
+    return api
+end
+
+-- Quadratische Aktion (Rejoin / Hop / Lowest / Job ID)
+local function HomeTile(parent, order, icon, text, onClick)
+    local btn = Create("TextButton", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0.25, -5, 1, 0),
+        LayoutOrder = order,
+        Text = "",
+        AutoButtonColor = false,
+        Parent = parent,
+    })
+    Corner(btn, 8)
+    local st = Stroke(btn, Theme.Border, 1)
+    local ic = NewIcon(btn, icon, 16, Theme.SubText, "•")
+    ic.Instance.AnchorPoint = Vector2.new(0.5, 0)
+    ic.Instance.Position = UDim2.new(0.5, 0, 0, 11)
+    local lbl = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 33),
+        Size = UDim2.new(1, -6, 0, 14),
+        Font = Theme.Font,
+        Text = text,
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+        Parent = btn,
+    })
+    btn.MouseEnter:Connect(function()
+        TintIcon(ic, Theme.Text)
+        Tween(lbl, 0.15, { TextColor3 = Theme.Text })
+        Tween(st, 0.15, { Color = Theme.Accent })
+    end)
+    btn.MouseLeave:Connect(function()
+        TintIcon(ic, Theme.SubText)
+        Tween(lbl, 0.15, { TextColor3 = Theme.SubText })
+        Tween(st, 0.15, { Color = Theme.Border })
+    end)
+    btn.MouseButton1Click:Connect(function()
+        task.spawn(onClick)
+    end)
+    return btn
+end
+
+-- Zeile in der Links-Karte (Icon, Titel, Beschreibung, Pfeil)
+local function HomeLink(parent, order, icon, title, desc, onClick)
+    local row = Create("TextButton", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -4, 0, 46),
+        LayoutOrder = order,
+        Text = "",
+        AutoButtonColor = false,
+        Parent = parent,
+    })
+    local ic = NewIcon(row, icon, 16, Theme.SubText, "•")
+    ic.Instance.AnchorPoint = Vector2.new(0, 0.5)
+    ic.Instance.Position = UDim2.new(0, 6, 0.5, 0)
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 34, 0, 6),
+        Size = UDim2.new(1, -84, 0, 16),
+        Font = Theme.FontBold,
+        Text = title,
+        TextColor3 = Theme.Text,
+        TextSize = 12,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = row,
+    })
+    local descLbl = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 34, 0, 23),
+        Size = UDim2.new(1, -84, 0, 14),
+        Font = Theme.Font,
+        Text = desc or "",
+        TextColor3 = Theme.SubText,
+        TextSize = 10,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = row,
+    })
+    local chev = Create("Frame", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -4, 0.5, 0),
+        Size = UDim2.fromOffset(30, 30),
+        Parent = row,
+    })
+    Corner(chev, 8)
+    local cst = Stroke(chev, Theme.Border, 1)
+    local cic = NewIcon(chev, "chevron-right", 14, Theme.SubText, ">")
+    cic.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    cic.Instance.Position = UDim2.fromScale(0.5, 0.5)
+
+    row.MouseEnter:Connect(function()
+        TintIcon(ic, Theme.Text)
+        TintIcon(cic, Theme.Text)
+        Tween(cst, 0.15, { Color = Theme.Accent })
+    end)
+    row.MouseLeave:Connect(function()
+        TintIcon(ic, Theme.SubText)
+        TintIcon(cic, Theme.SubText)
+        Tween(cst, 0.15, { Color = Theme.Border })
+    end)
+    row.MouseButton1Click:Connect(function()
+        task.spawn(onClick)
+    end)
+    return {
+        SetDesc = function(text)
+            descLbl.Text = text
+        end,
+    }
+end
+
+-- Anzahl der Features (ueber die Suche erfasst) und der Tabs, die welche enthalten
+function Window:GetFeatureCount()
+    local features, tabs, seen = 0, 0, {}
+    if self._search then
+        for _, e in ipairs(self._search.Entries) do
+            if e.Type ~= "Tab" and e.Tab and not e.Tab._internal then
+                features = features + 1
+                if not seen[e.Tab] then
+                    seen[e.Tab] = true
+                    tabs = tabs + 1
+                end
+            end
+        end
+    end
+    return features, tabs
+end
+
+-- Oeffnet die komplette Feature-Liste (im Such-Panel)
+function Window:OpenFeatureList()
+    if self._search and not self.Minimized then
+        self._search.OpenList()
+    else
+        RavineUI:Notify({ Title = "Feature list", Description = "Search is disabled for this window", Icon = "info" })
+    end
+end
+
 function Window:AddHomeTab(opts)
+    opts = opts or {}
+    local tab = self:AddTab(opts.Name or "Home", opts.Icon or "house")
+    tab._internal = true
+    tab.Left:Destroy()
+    tab.Right:Destroy()
+    self.HomeTab = tab
+
+    local home = {}
+    tab.Home = home
+
+    local data = ReadHomeData()
+    local uid = tostring(LocalPlayer.UserId)
+    local prefs = { HideName = data.HideName == true, HideAvatar = data.HideAvatar == true }
+    local function saveData()
+        data.HideName = prefs.HideName
+        data.HideAvatar = prefs.HideAvatar
+        WriteHomeData(data)
+    end
+
+    local page = Create("ScrollingFrame", {
+        Name = "HomePage",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Border,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Parent = tab.Frame,
+    })
+    Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8),
+        Parent = page,
+    })
+    Create("UIPadding", { PaddingRight = UDim.new(0, 4), Parent = page })
+
+    local function Label(parent, props)
+        props.BackgroundTransparency = 1
+        props.Parent = parent
+        props.Font = props.Font or Theme.Font
+        props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
+        return Create("TextLabel", props)
+    end
+
+    -- =============== 1) HEADER ===============
+    local header = Card(page, UDim2.new(1, 0, 0, 100), Theme.Secondary)
+    header.LayoutOrder = 1
+    header.ClipsDescendants = true
+
+    Label(header, {
+        Position = UDim2.new(0, 22, 0, 12),
+        Size = UDim2.new(1, -170, 0, 12),
+        Text = string.upper(opts.Greeting or "Welcome back"),
+        TextColor3 = Theme.SubText,
+        TextSize = 10,
+    })
+    local nameLabel = Label(header, {
+        Position = UDim2.new(0, 22, 0, 24),
+        Size = UDim2.new(1, -170, 0, 28),
+        Font = Theme.FontBold,
+        Text = LocalPlayer.DisplayName,
+        TextColor3 = Theme.Text,
+        TextSize = 24,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+    local userLabel = Label(header, {
+        Position = UDim2.new(0, 22, 0, 52),
+        Size = UDim2.new(1, -170, 0, 14),
+        Text = "@" .. LocalPlayer.Name,
+        TextColor3 = Theme.SubText,
+        TextSize = 12,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+
+    local avatar = Create("ImageLabel", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -14, 1, 8),
+        Size = UDim2.fromOffset(110, 110),
+        ScaleType = Enum.ScaleType.Fit,
+        Parent = header,
+    })
+    local avatarHidden = Create("Frame", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -28, 0.5, 0),
+        Size = UDim2.fromOffset(64, 64),
+        Visible = false,
+        Parent = header,
+    })
+    Corner(avatarHidden, 14)
+    Stroke(avatarHidden, Theme.Border, 1)
+    local hiddenIc = NewIcon(avatarHidden, "eye-off", 22, Theme.SubText, "?")
+    hiddenIc.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+    hiddenIc.Instance.Position = UDim2.fromScale(0.5, 0.5)
+
+    task.spawn(function()
+        local ok, url = pcall(Players.GetUserThumbnailAsync, Players, LocalPlayer.UserId,
+            Enum.ThumbnailType.AvatarBust, Enum.ThumbnailSize.Size180x180)
+        if avatar.Parent then
+            if ok and url then
+                avatar.Image = url
+            else
+                LoadAvatar(avatar)
+            end
+        end
+    end)
+
+    local chips = Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 22, 0, 70),
+        Size = UDim2.new(1, -170, 0, 26),
+        Parent = header,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = chips,
+    })
+
+    local nameChip, avatarChip
+    local function applyPrivacy()
+        nameLabel.Text = prefs.HideName and "Hidden" or LocalPlayer.DisplayName
+        userLabel.Text = prefs.HideName and "@hidden" or ("@" .. LocalPlayer.Name)
+        avatar.Visible = not prefs.HideAvatar
+        avatarHidden.Visible = prefs.HideAvatar
+        if nameChip then
+            nameChip.SetActive(prefs.HideName)
+        end
+        if avatarChip then
+            avatarChip.SetActive(prefs.HideAvatar)
+        end
+    end
+
+    if opts.Badge ~= false then
+        HomeChip(chips, 1, opts.BadgeIcon or "swords", opts.Badge or "Beta", nil)
+    end
+    nameChip = HomeChip(chips, 2, "eye-off", "Name", function()
+        prefs.HideName = not prefs.HideName
+        applyPrivacy()
+        saveData()
+    end)
+    avatarChip = HomeChip(chips, 3, "user-round", "Avatar", function()
+        prefs.HideAvatar = not prefs.HideAvatar
+        applyPrivacy()
+        saveData()
+    end)
+    applyPrivacy()
+
+    -- =============== 2) PERFORMANCE + STATS ===============
+    local perf = Card(page, UDim2.new(1, 0, 0, 128), Theme.Secondary)
+    perf.LayoutOrder = 2
+    local BARS = 32
+
+    local function PerfColumn(xScale, xOffset, icon, title)
+        local col = Create("Frame", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(xScale, xOffset, 0, 12),
+            Size = UDim2.new(0.5, -24, 0, 74),
+            Parent = perf,
+        })
+        local ic = NewIcon(col, icon, 11, Theme.SubText, "")
+        ic.Instance.Position = UDim2.fromOffset(0, 1)
+        Label(col, {
+            Position = UDim2.fromOffset(16, 0),
+            Size = UDim2.new(1, -16, 0, 14),
+            Text = title,
+            TextColor3 = Theme.SubText,
+            TextSize = 10,
+        })
+        local value = Label(col, {
+            Position = UDim2.fromOffset(0, 16),
+            Size = UDim2.new(1, 0, 0, 28),
+            Font = Theme.FontBold,
+            Text = "-",
+            TextColor3 = Theme.Success,
+            TextSize = 24,
+        })
+        local graph = MakeGraph(col, UDim2.fromOffset(0, 48), UDim2.new(1, 0, 0, 26), BARS)
+        return value, graph
+    end
+    local fpsValue, fpsGraph = PerfColumn(0, 16, "gauge", "FPS")
+    local pingValue, pingGraph = PerfColumn(0.5, 8, "wifi", "PING")
+
+    Create("Frame", {
+        BackgroundColor3 = Theme.Border,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 16, 0, 90),
+        Size = UDim2.new(1, -32, 0, 1),
+        Parent = perf,
+    })
+
+    local function Stat(i, title)
+        local v = Label(perf, {
+            Position = UDim2.new((i - 1) / 3, 16, 0, 96),
+            Size = UDim2.new(1 / 3, -16, 0, 16),
+            Font = Theme.FontBold,
+            Text = "-",
+            TextColor3 = Theme.Text,
+            TextSize = 13,
+        })
+        Label(perf, {
+            Position = UDim2.new((i - 1) / 3, 16, 0, 112),
+            Size = UDim2.new(1 / 3, -16, 0, 12),
+            Text = title,
+            TextColor3 = Theme.SubText,
+            TextSize = 9,
+        })
+        return v
+    end
+    local sPlayers = Stat(1, "PLAYERS")
+    local sExecs = Stat(2, "EXECS")
+    local sSession = Stat(3, "SESSION")
+
+    -- Ausfuehrungen: eigene Zahl / Funktion (z. B. von deinem Server) oder lokaler Zaehler pro Account
+    home.SetExecutions = function(n)
+        sExecs.Text = tostring(n)
+    end
+    if type(opts.Executions) == "number" then
+        home.SetExecutions(opts.Executions)
+    elseif type(opts.Executions) == "function" then
+        home.SetExecutions("...")
+        task.spawn(function()
+            local ok, v = pcall(opts.Executions)
+            home.SetExecutions(ok and v or "N/A")
+        end)
+    else
+        local n = (tonumber(data.Execs[uid]) or 0) + 1
+        data.Execs[uid] = n
+        saveData()
+        home.SetExecutions(n)
+    end
+
+    -- =============== 3) GAME-KARTE + LINKS ===============
+    local mid = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 160),
+        LayoutOrder = 3,
+        Parent = page,
+    })
+
+    local gameCard = Card(mid, UDim2.new(0.62, -4, 1, 0), Theme.Secondary)
+    local thumb = Create("ImageLabel", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(14, 14),
+        Size = UDim2.fromOffset(46, 46),
+        ScaleType = Enum.ScaleType.Crop,
+        Image = string.format("rbxthumb://type=GameIcon&id=%d&w=150&h=150", game.GameId),
+        Parent = gameCard,
+    })
+    Corner(thumb, 8)
+    Stroke(thumb, Theme.Border, 1)
+
+    local gameName = Label(gameCard, {
+        Position = UDim2.new(0, 70, 0, 15),
+        Size = UDim2.new(1, -84, 0, 18),
+        Font = Theme.FontBold,
+        Text = "Loading...",
+        TextColor3 = Theme.Text,
+        TextSize = 14,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+    local gameSub = Label(gameCard, {
+        Position = UDim2.new(0, 70, 0, 35),
+        Size = UDim2.new(1, -84, 0, 14),
+        Text = "",
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+
+    local creatorName = ""
+    task.spawn(function()
+        local ok, info = pcall(function()
+            return MarketplaceService:GetProductInfo(game.PlaceId)
+        end)
+        if ok and type(info) == "table" then
+            gameName.Text = tostring(info.Name or "Unknown game")
+            creatorName = info.Creator and tostring(info.Creator.Name) or ""
+        else
+            gameName.Text = "Unknown game"
+        end
+    end)
+
+    local tiles = Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(14, 68),
+        Size = UDim2.new(1, -28, 0, 56),
+        Parent = gameCard,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = tiles,
+    })
+
+    local busy = false
+    local function teleportTo(mode)
+        if busy then
+            return
+        end
+        busy = true
+        RavineUI:Notify({
+            Title = mode == "lowest" and "Lowest server" or "Server hop",
+            Description = "Searching for a server...",
+            Icon = "search",
+        })
+        local server = PickServer(mode)
+        if not server then
+            busy = false
+            RavineUI:Notify({ Title = "No server found", Description = "Try again in a moment", Icon = "triangle-alert" })
+            return
+        end
+        local ok = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+        end)
+        if not ok then
+            RavineUI:Notify({ Title = "Teleport failed", Description = "Could not join that server", Icon = "triangle-alert" })
+        end
+        task.delay(4, function()
+            busy = false
+        end)
+    end
+
+    HomeTile(tiles, 1, "refresh-cw", "Rejoin", function()
+        RavineUI:Notify({ Title = "Rejoin", Description = "Rejoining this server...", Icon = "refresh-cw" })
+        pcall(RejoinServer)
+    end)
+    HomeTile(tiles, 2, "shuffle", "Hop", function()
+        teleportTo("random")
+    end)
+    HomeTile(tiles, 3, "users", "Lowest", function()
+        teleportTo("lowest")
+    end)
+    HomeTile(tiles, 4, "copy", "Job ID", function()
+        local ok = Copy(game.JobId)
+        RavineUI:Notify({
+            Title = ok and "Copied" or "Copy failed",
+            Description = ok and "Job ID copied to clipboard" or "Your executor has no clipboard function",
+            Icon = ok and "copy" or "triangle-alert",
+        })
+    end)
+
+    local jobId = game.JobId
+    local jobShort = jobId == "" and "-" or (#jobId > 14 and (jobId:sub(1, 8) .. ".." .. jobId:sub(-4)) or jobId)
+    Label(gameCard, {
+        Position = UDim2.new(0, 14, 0, 134),
+        Size = UDim2.new(1, -28, 0, 14),
+        Text = "Job " .. jobShort .. "   ·   Place " .. tostring(game.PlaceId),
+        TextColor3 = Theme.SubText,
+        TextSize = 10,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+
+    -- Links
+    local linkCard = Card(mid, UDim2.new(0.38, -4, 1, 0), Theme.Secondary)
+    linkCard.Position = UDim2.new(0.62, 4, 0, 0)
+    Label(linkCard, {
+        Position = UDim2.new(0, 16, 0, 12),
+        Size = UDim2.new(1, -32, 0, 12),
+        Text = "LINKS",
+        TextColor3 = Theme.SubText,
+        TextSize = 10,
+    })
+    local linkList = Create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 10, 0, 32),
+        Size = UDim2.new(1, -20, 1, -40),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Border,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Parent = linkCard,
+    })
+    Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2),
+        Parent = linkList,
+    })
+
+    local linkOrder = 0
+    local featureRow
+    if opts.FeatureList ~= false then
+        linkOrder = linkOrder + 1
+        featureRow = HomeLink(linkList, linkOrder, "list-checks", "Feature list", "Counting features...", function()
+            self:OpenFeatureList()
+        end)
+    end
+
+    if opts.Discord and opts.Discord ~= "" then
+        linkOrder = linkOrder + 1
+        HomeLink(linkList, linkOrder, "message-circle", "Discord", "Tap to join the server", function()
+            JoinDiscord(opts.Discord)
+        end)
+    end
+
+    local cl = opts.Changelog or RavineUI._LastChangelog
+    if type(cl) == "table" then
+        linkOrder = linkOrder + 1
+        local count = type(cl.Entries) == "table" and #cl.Entries or 0
+        HomeLink(linkList, linkOrder, "scroll-text", "Changelog",
+            "Version " .. tostring(cl.Version or RavineUI.Version) .. " - " .. Plural(count, "change"),
+            function()
+                local copy = {}
+                for k, v in pairs(cl) do
+                    if k ~= "OnClose" then
+                        copy[k] = v
+                    end
+                end
+                RavineUI:ShowChangelog(copy)
+            end)
+    end
+
+    -- eigene Links: { Name = "Website", Description = "...", Icon = "globe", Url = "https://..." } oder Callback = function() end
+    for _, l in ipairs(opts.Links or {}) do
+        linkOrder = linkOrder + 1
+        HomeLink(linkList, linkOrder, l.Icon or "link", l.Name or "Link", l.Description or l.Url or "", function()
+            if l.Callback then
+                task.spawn(l.Callback)
+            elseif l.Url then
+                local ok = Copy(l.Url)
+                RavineUI:Notify({
+                    Title = ok and "Link copied" or "Copy failed",
+                    Description = ok and l.Url or "Your executor has no clipboard function",
+                    Icon = ok and "link" or "triangle-alert",
+                })
+            end
+        end)
+    end
+
+    -- =============== 4) STATUS-ZEILE ===============
+    local required = opts.RequiredFunctions or { "loadstring" }
+    local supported = true
+    local env = (getgenv and getgenv()) or _G
+    for _, fn in ipairs(required) do
+        if env[fn] == nil then
+            supported = false
+            break
+        end
+    end
+
+    local statusRow = Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 24),
+        LayoutOrder = 4,
+        Parent = page,
+    })
+    local statusLeft = Create("Frame", {
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 24),
+        Parent = statusRow,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8),
+        Parent = statusLeft,
+    })
+    Create("UIPadding", { PaddingLeft = UDim.new(0, 6), Parent = statusLeft })
+    local dot = Create("Frame", {
+        BackgroundColor3 = supported and Theme.Success or Theme.Warning,
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(8, 8),
+        LayoutOrder = 1,
+        Parent = statusLeft,
+    })
+    Corner(dot, 4)
+    Label(statusLeft, {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 16),
+        LayoutOrder = 2,
+        Font = Theme.FontBold,
+        Text = GetExecutorName(),
+        TextColor3 = Theme.Text,
+        TextSize = 12,
+    })
+    Label(statusLeft, {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 16),
+        LayoutOrder = 3,
+        Text = supported and "Your executor is supported and fully compatible."
+            or "Your executor might not support all features.",
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+    })
+
+    local statusRight = Create("Frame", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -4, 0.5, 0),
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 24),
+        Parent = statusRow,
+    })
+    Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8),
+        Parent = statusRight,
+    })
+    Label(statusRight, {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 16),
+        LayoutOrder = 1,
+        Text = "Hide with",
+        TextColor3 = Theme.SubText,
+        TextSize = 11,
+    })
+    local keyBadge = Create("Frame", {
+        BackgroundColor3 = Theme.Tertiary,
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 22),
+        LayoutOrder = 2,
+        Parent = statusRight,
+    })
+    Corner(keyBadge, 6)
+    Stroke(keyBadge, Theme.Border, 1)
+    Create("UIPadding", {
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+        Parent = keyBadge,
+    })
+    local keyLabel = Label(keyBadge, {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 22),
+        Font = Theme.FontBold,
+        Text = ShortKey(self.ToggleKeybind.Name),
+        TextColor3 = Theme.Text,
+        TextSize = 11,
+    })
+
+    -- =============== 5) ACCOUNT (einklappbar) ===============
+    local accountRows = {}
+    if opts.Account ~= false then
+        local acc = type(opts.Account) == "table" and opts.Account or {}
+        local box = Card(page, UDim2.new(1, 0, 0, 0), Theme.Secondary)
+        box.AutomaticSize = Enum.AutomaticSize.Y
+        box.LayoutOrder = 5
+        Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = box })
+
+        local head = Create("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 42),
+            LayoutOrder = 1,
+            Text = "",
+            AutoButtonColor = false,
+            Parent = box,
+        })
+        local hIc = NewIcon(head, acc.Icon or "shield", 16, Theme.SubText, "•")
+        hIc.Instance.AnchorPoint = Vector2.new(0, 0.5)
+        hIc.Instance.Position = UDim2.new(0, 16, 0.5, 0)
+        Label(head, {
+            Position = UDim2.new(0, 44, 0, 0),
+            Size = UDim2.new(1, -90, 1, 0),
+            Font = Theme.FontBold,
+            Text = acc.Title or "Account",
+            TextColor3 = Theme.Text,
+            TextSize = 13,
+        })
+        local chevron = NewIcon(head, "chevron-down", 14, Theme.SubText, "v")
+        chevron.Instance.AnchorPoint = Vector2.new(0.5, 0.5)
+        chevron.Instance.Position = UDim2.new(1, -24, 0.5, 0)
+
+        local body = Create("Frame", {
+            BackgroundTransparency = 1,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 0),
+            LayoutOrder = 2,
+            Parent = box,
+        })
+        Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = body })
+        Create("Frame", {
+            BackgroundColor3 = Theme.Border,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 1),
+            LayoutOrder = 0,
+            Parent = body,
+        })
+
+        local rows = acc.Rows or {
+            { Label = "Flagged", Value = opts.Flagged and "Yes" or "No", Color = opts.Flagged and BAD_COLOR or nil },
+            { Label = "Account age", Value = function() return LocalPlayer.AccountAge .. " days" end },
+            { Label = "User ID", Value = tostring(LocalPlayer.UserId) },
+        }
+        for i, r in ipairs(rows) do
+            local row = Create("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 32),
+                LayoutOrder = i,
+                Parent = body,
+            })
+            Label(row, {
+                Position = UDim2.new(0, 16, 0, 0),
+                Size = UDim2.new(0.5, -16, 1, 0),
+                Text = tostring(r.Label),
+                TextColor3 = Theme.SubText,
+                TextSize = 12,
+            })
+            local valueLbl = Label(row, {
+                Position = UDim2.new(0.5, 0, 0, 0),
+                Size = UDim2.new(0.5, -16, 1, 0),
+                Font = Theme.FontBold,
+                Text = "-",
+                TextColor3 = r.Color or Theme.Text,
+                TextSize = 12,
+                TextXAlignment = Enum.TextXAlignment.Right,
+            })
+            local entry = { Label = tostring(r.Label), Lbl = valueLbl, Value = r.Value }
+            table.insert(accountRows, entry)
+            if type(r.Value) ~= "function" then
+                valueLbl.Text = tostring(r.Value)
+            end
+        end
+
+        local collapsed = acc.Collapsed == true
+        local function applyCollapse()
+            body.Visible = not collapsed
+            Tween(chevron.Instance, 0.15, { Rotation = collapsed and -90 or 0 })
+        end
+        applyCollapse()
+        head.MouseEnter:Connect(function()
+            TintIcon(hIc, Theme.Text)
+        end)
+        head.MouseLeave:Connect(function()
+            TintIcon(hIc, Theme.SubText)
+        end)
+        head.MouseButton1Click:Connect(function()
+            collapsed = not collapsed
+            applyCollapse()
+        end)
+    end
+
+    -- Zeile spaeter aendern: tab.Home.SetAccountRow("Flagged", "Yes", Color3.fromRGB(231, 76, 60))
+    home.SetAccountRow = function(label, value, color)
+        for _, r in ipairs(accountRows) do
+            if r.Label == label then
+                r.Value = value
+                r.Lbl.Text = tostring(type(value) == "function" and value() or value)
+                if color then
+                    r.Lbl.TextColor3 = color
+                end
+            end
+        end
+    end
+
+    -- =============== LIVE-UPDATE ===============
+    local frames, lastT = 0, os.clock()
+    Connect(RunService.Heartbeat, function()
+        frames = frames + 1
+    end)
+    local startClock = os.clock()
+    local lastFeatureText = ""
+
+    local function qualityColor(v, goodAt, okAt, higherIsBetter)
+        local good, ok
+        if higherIsBetter then
+            good, ok = v >= goodAt, v >= okAt
+        else
+            good, ok = v <= goodAt, v <= okAt
+        end
+        if good then
+            return Theme.Success
+        elseif ok then
+            return Theme.Warning
+        end
+        return BAD_COLOR
+    end
+
+    local function refresh()
+        local now = os.clock()
+        local dt = now - lastT
+        local fps = dt > 0 and math.floor(frames / dt + 0.5) or 0
+        frames = 0
+        lastT = now
+
+        local fc = qualityColor(fps, 50, 30, true)
+        fpsValue.Text = tostring(fps)
+        fpsValue.TextColor3 = fc
+        fpsGraph.Push(fps, fc, 120)
+
+        local ping = GetPing()
+        local pc = qualityColor(ping or 999, 80, 150, false)
+        pingValue.Text = ping and (ping .. "ms") or "N/A"
+        pingValue.TextColor3 = pc
+        pingGraph.Push(ping or 0, pc, 150)
+
+        sPlayers.Text = #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+        sSession.Text = FormatSession(now - startClock)
+
+        gameSub.Text = (creatorName ~= "" and ("by " .. creatorName .. "  ·  ") or "")
+            .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers .. " players"
+
+        keyLabel.Text = ShortKey(self.ToggleKeybind.Name)
+
+        if featureRow then
+            local f, t = self:GetFeatureCount()
+            local text = f .. (f == 1 and " feature" or " features") .. " across " .. Plural(t, "tab")
+            if text ~= lastFeatureText then
+                lastFeatureText = text
+                featureRow.SetDesc(text)
+            end
+        end
+
+        for _, r in ipairs(accountRows) do
+            if type(r.Value) == "function" then
+                local ok, v = pcall(r.Value)
+                r.Lbl.Text = ok and tostring(v) or "N/A"
+            end
+        end
+    end
+
+    task.spawn(function()
+        while self.Alive and not RavineUI.Unloaded do
+            pcall(refresh)
+            task.wait(0.5)
+        end
+    end)
+
+    tab.Refresh = function()
+        pcall(refresh)
+    end
+    return tab
+end
+
+-- ============ HOME TAB (klassisch, alte Version) ============
+function Window:AddHomeTabClassic(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Home", opts.Icon or "house")
     tab.Left:Destroy()
@@ -3160,6 +4316,7 @@ end
 function Window:AddSettingsTab(opts)
     opts = opts or {}
     local tab = self:AddTab(opts.Name or "Settings", opts.Icon or "settings")
+    tab._internal = true
 
     local menu = tab:AddLeftGroupbox("Menu", "layout-dashboard")
     if not RavineUI.IsMobile then
@@ -3906,7 +5063,6 @@ function Groupbox:AddSlider(id, opts)
     return obj
 end
 
--- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
 -- Dropdown: Einzelauswahl (Standard) oder Mehrfachauswahl mit Multi = true
 -- Suchleiste: Search = true / false. Ohne Angabe erscheint sie automatisch ab 8 Eintraegen.
 function Groupbox:AddDropdown(id, opts)
